@@ -32,7 +32,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/authContext';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const COLORS = {
