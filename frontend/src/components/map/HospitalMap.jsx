@@ -91,6 +91,7 @@ export default function HospitalMap({
       nearbyLayer.current.clearLayers();
 
       data.elements.forEach(h => {
+        
 
         const lat = h.lat || h.center?.lat;
         const lng = h.lon || h.center?.lon;
