@@ -246,7 +246,7 @@ export default function MainLayout() {
           flexGrow: 1,
           p: 3,
           width: { md: `calc(100% - ${drawerWidth}px)` },
-          backgroundColor: 'rgba(184, 184, 184, 0.65)',
+          backgroundColor: '#f7f9fc',
           minHeight: '100vh',
         }}
       >
