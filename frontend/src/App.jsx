@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
 import ProtectedRoute from "./components/ProtectedRoute";
-import MainLayout from "./Layouts/Mainlayout";
+import MainLayout from "./layouts/Mainlayout";
 import Login from "./pages/login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/dashboard";
