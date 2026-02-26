@@ -7,13 +7,14 @@ import MainLayout from "./layouts/Mainlayout";
 import Login from "./pages/login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/dashboard";
-import BiteCases from "./pages/BiteCases";
 import SnakeReports from "./pages/SnakeReports";
 import Hospitals from "./pages/Hospitals";
 import ASVStock from "./pages/ASVStock";
 import SnakeRescuers from "./pages/SnakeRescuers";
 import Snakes from "./pages/Snakes";
-
+import Users from "./pages/Users";
+import SnakeBiteCase from "./pages/SnakeBiteCase";
+import AuditLogPage from "./pages/AuditLogPage";
 const theme = createTheme({
   palette: {
     primary: {
@@ -78,10 +79,7 @@ export default function App() {
                 element={<Navigate to="/dashboard" replace />}
               />
               <Route path="dashboard" element={<Dashboard />} />
-              <Route
-                path="bite-cases"
-                element={<BiteCases />}
-              />
+              
               <Route
                 path="snake-reports"
                 element={<SnakeReports />}
@@ -91,8 +89,11 @@ export default function App() {
               <Route
                 path="snake-rescuers"
                 element={<SnakeRescuers />}
-              />
+              /> 
               <Route path="snakes" element={<Snakes />} />
+              <Route path="users" element={<Users />} />
+              <Route path="bite-cases/:id" element={<SnakeBiteCase />} />
+              <Route path="audit-logs" element={<AuditLogPage />} />
             </Route>
 
             {/* Catch all */}
