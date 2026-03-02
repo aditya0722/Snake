@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   Box, Typography, Grid, Card, CardContent, Button, Dialog,
   DialogContent, DialogActions, TextField, IconButton, Snackbar,
@@ -53,15 +53,15 @@ const ROLES = {
   },
 };
 
-// ── Mock data ─────────────────────────────────────────────────────────────────
-const MOCK_USERS = [
-  { id: 1, name: "Ashan Perera",    email: "ashan@example.com",  phone_number: "+94 77 123 4567", role: "admin",              address: "12 Galle Rd",         district: "Colombo",  latitude: 6.9271,  longitude: 79.8612, created_at: "2024-01-15" },
-  { id: 2, name: "Nimasha Silva",   email: "nimasha@example.com", phone_number: "+94 76 234 5678", role: "programme_manager",  address: "45 Kandy Rd",         district: "Kandy",    latitude: 7.2906,  longitude: 80.6337, created_at: "2024-02-20" },
-  { id: 3, name: "Kasun Fernando",  email: "kasun@example.com",  phone_number: "+94 75 345 6789", role: "treatment_provider", address: "78 Hospital Ave",     district: "Galle",    latitude: 6.0535,  longitude: 80.2210, created_at: "2024-03-10" },
-  { id: 4, name: "Dilani Jayawardena", email: "dilani@example.com", phone_number: "+94 71 456 7890", role: "chw",            address: "23 Temple St",        district: "Matara",   latitude: 5.9549,  longitude: 80.5550, created_at: "2024-03-18" },
-  { id: 5, name: "Ruwan Bandara",   email: "ruwan@example.com",  phone_number: "+94 70 567 8901", role: "community",          address: "56 Main St",          district: "Kurunegala", latitude: 7.4867, longitude: 80.3647, created_at: "2024-04-05" },
-  { id: 6, name: "Sachini Rathnayake", email: "sachini@example.com", phone_number: "+94 72 678 9012", role: "chw",          address: "34 Lake Rd",          district: "Ratnapura", latitude: 6.6828, longitude: 80.3992, created_at: "2024-04-22" },
-];
+// // ── Mock data ─────────────────────────────────────────────────────────────────
+// const MOCK_USERS = [
+//   { id: 1, name: "Ashan Perera",    email: "ashan@example.com",  phone_number: "+94 77 123 4567", role: "admin",              address: "12 Galle Rd",         district: "Colombo",  latitude: 6.9271,  longitude: 79.8612, created_at: "2024-01-15" },
+//   { id: 2, name: "Nimasha Silva",   email: "nimasha@example.com", phone_number: "+94 76 234 5678", role: "programme_manager",  address: "45 Kandy Rd",         district: "Kandy",    latitude: 7.2906,  longitude: 80.6337, created_at: "2024-02-20" },
+//   { id: 3, name: "Kasun Fernando",  email: "kasun@example.com",  phone_number: "+94 75 345 6789", role: "treatment_provider", address: "78 Hospital Ave",     district: "Galle",    latitude: 6.0535,  longitude: 80.2210, created_at: "2024-03-10" },
+//   { id: 4, name: "Dilani Jayawardena", email: "dilani@example.com", phone_number: "+94 71 456 7890", role: "chw",            address: "23 Temple St",        district: "Matara",   latitude: 5.9549,  longitude: 80.5550, created_at: "2024-03-18" },
+//   { id: 5, name: "Ruwan Bandara",   email: "ruwan@example.com",  phone_number: "+94 70 567 8901", role: "community",          address: "56 Main St",          district: "Kurunegala", latitude: 7.4867, longitude: 80.3647, created_at: "2024-04-05" },
+//   { id: 6, name: "Sachini Rathnayake", email: "sachini@example.com", phone_number: "+94 72 678 9012", role: "chw",          address: "34 Lake Rd",          district: "Ratnapura", latitude: 6.6828, longitude: 80.3992, created_at: "2024-04-22" },
+// ];
 
 const emptyForm = {
   name: "", email: "", phone_number: "", role: "community",
@@ -239,7 +239,7 @@ function UserCard({ user, onEdit, onDelete, onRoleChange }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function Users() {
-  const [users, setUsers]         = useState(MOCK_USERS);
+  const [users, setUsers]         = useState([]); // start with empty, will load from API
   const [search, setSearch]       = useState("");
   const [filterRole, setFilterRole] = useState("all");
   const [openDialog, setOpenDialog] = useState(false);
@@ -251,9 +251,57 @@ export default function Users() {
   const theme = { primary: "#1a233a", bg: "#f8f9fa", inputBg: "#f4f7f9", cardShadow: "0px 4px 20px rgba(0,0,0,0.08)" };
 
   const showSnack = (message, severity = "success") => setSnack({ open: true, message, severity });
+   useEffect(() => {
+  const fetchUsers = async () => {
+    try {
+      const response = await api.get(
+        "users/users.php?action=getAll&limit=10"
+      );
+      console.log(response.data);
+      
+      if (response.data.success) {  
+        setUsers(response.data.data); 
+      }
+    } catch (err) {
+      showSnack("Failed to load users", "error");
+    }
+  };
+
+  fetchUsers();
+}, []);
+
+//  API call
+    const handleAction = async ({
+  action,
+  method = "POST",
+  data = {},
+  params = {},
+  successMessage
+}) => {
+  try {
+    const response = await api({
+      method,
+      url: "/users/users.php",
+      params: { action, ...params },
+      data
+    });
+
+    if (response.data.success) {
+      console.log(response.data);
+      
+      showSnack(successMessage || response.data.message, "success");
+    } else {
+      showSnack(response.data.message || "Action failed", "error");
+    }
+
+  } catch (error) {
+    showSnack("Server error", "error");
+  }
+};
+
 
   // ── Filtered + searched users ─────────────────────────────────────────────
-  const filtered = useMemo(() => users.filter(u => {
+    const filtered = useMemo(() => users.filter(u => {
     const matchSearch =
       u.name.toLowerCase().includes(search.toLowerCase()) ||
       u.email.toLowerCase().includes(search.toLowerCase()) ||
@@ -269,6 +317,7 @@ export default function Users() {
     { label: "CHW",                  value: users.filter(u => u.role === "chw").length,             color: "#00d4aa" },
     { label: "Treatment Providers",  value: users.filter(u => u.role === "treatment_provider").length, color: "#ffb347" },
   ], [users]);
+
 
   // ── Open Add dialog ───────────────────────────────────────────────────────
   const handleOpenAdd = () => {
@@ -329,6 +378,14 @@ export default function Users() {
 
   // ── Delete ────────────────────────────────────────────────────────────────
   const handleDeleteConfirm = () => {
+    const deleteUser = (id) => {
+    handleAction({
+      action: "delete",
+      data: { id },
+      successMessage: "User deleted successfully"
+    });
+  };
+  deleteUser(deleteConfirm);
     setUsers(prev => prev.filter(u => u.id !== deleteConfirm));
     showSnack("User removed", "info");
     setDeleteConfirm(null);

@@ -31,12 +31,12 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  const login = ({ id, role, token }) => {
-    const userData = { id, role, token };
+  const login = ({ id, role, token, name }) => {
+    const userData = { id, role, token, name };
 
     setUser(userData);
     localStorage.setItem("user", JSON.stringify(userData));
-
+    
     // Attach token to all future requests
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
   };

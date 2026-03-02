@@ -151,10 +151,11 @@ export default function Login() {
 
       // Check exact success value
       if (response.data.status === true) {
-        const { user_id, role, token } = response.data.data;
+        const { name,user_id, role, token, } = response.data.data;
 
         login({
           id: user_id,
+          name: name,
           role: role,
           token: token,
         });
