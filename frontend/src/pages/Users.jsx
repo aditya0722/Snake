@@ -288,9 +288,10 @@ export default function Users() {
 
     if (response.data.success) {
       console.log(response.data);
-      
       showSnack(successMessage || response.data.message, "success");
     } else {
+      console.log(response.data);
+      
       showSnack(response.data.message || "Action failed", "error");
     }
 
@@ -336,39 +337,43 @@ export default function Users() {
       role:         user.role         || "community",
       address:      user.address      || "",
       district:     user.district     || "",
-      latitude:     user.latitude     ?? "",
-      longitude:    user.longitude    ?? "",
     });
     setOpenDialog(true);
   };
 
   // ── Save (add or update) ──────────────────────────────────────────────────
-  const handleSave = () => {
-    if (!form.name.trim())  { showSnack("Name is required", "error");  return; }
-    if (!form.email.trim()) { showSnack("Email is required", "error"); return; }
+const handleSave = async () => {
+  if (!form.name.trim()) {
+    showSnack("Name is required", "error");
+    return;
+  }
 
+  if (!form.email.trim()) {
+    showSnack("Email is required", "error");
+    return;
+  }
+const Editor = JSON.parse(localStorage.getItem("user"));
+  try {
     if (editingId) {
-      setUsers(prev => prev.map(u =>
-        u.id === editingId
-          ? { ...u, ...form, latitude: parseFloat(form.latitude) || u.latitude, longitude: parseFloat(form.longitude) || u.longitude }
-          : u
-      ));
-      showSnack("User updated successfully");
+      await handleAction({
+        action: "update",
+        data: { id: editingId, editorId: Editor.id, ...form },
+        successMessage: "User updated successfully"
+      });
     } else {
-      const emailExists = users.find(u => u.email === form.email.trim());
-      if (emailExists) { showSnack("Email already registered", "warning"); return; }
-      setUsers(prev => [...prev, {
-        ...form,
-        id: Date.now(),
-        latitude:  parseFloat(form.latitude)  || null,
-        longitude: parseFloat(form.longitude) || null,
-        created_at: new Date().toISOString().split("T")[0],
-      }]);
-      showSnack("User added successfully");
+      await handleAction({
+        action: "create", // ensure backend matches this
+        data: form,
+        successMessage: "User added successfully"
+      });
     }
     setOpenDialog(false);
     setEditingId(null);
-  };
+
+  } catch (err) {
+    showSnack("Server error", "error");
+  }
+};
 
   // ── Role change directly from card ────────────────────────────────────────
   const handleRoleChange = (id, newRole) => {
@@ -387,7 +392,6 @@ export default function Users() {
   };
   deleteUser(deleteConfirm);
     setUsers(prev => prev.filter(u => u.id !== deleteConfirm));
-    showSnack("User removed", "info");
     setDeleteConfirm(null);
   };
 
@@ -554,24 +558,6 @@ export default function Users() {
                 InputLabelProps={{ shrink: true }} />
             </Stack>
 
-            <Divider sx={{ borderStyle: "dashed" }}>
-              <Typography variant="caption" sx={{ color: "#aaa", fontWeight: 600, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                Coordinates (optional)
-              </Typography>
-            </Divider>
-
-            <Stack direction="row" spacing={2}>
-              <TextField label="Latitude" fullWidth type="number" value={form.latitude}
-                onChange={e => setForm({ ...form, latitude: e.target.value })}
-                placeholder="e.g. 6.9271"
-                InputProps={{ sx: { borderRadius: "10px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } } }}
-                InputLabelProps={{ shrink: true }} />
-              <TextField label="Longitude" fullWidth type="number" value={form.longitude}
-                onChange={e => setForm({ ...form, longitude: e.target.value })}
-                placeholder="e.g. 79.8612"
-                InputProps={{ sx: { borderRadius: "10px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } } }}
-                InputLabelProps={{ shrink: true }} />
-            </Stack>
           </Stack>
         </DialogContent>
 
