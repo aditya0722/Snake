@@ -1,17 +1,18 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Box, Typography, Grid, Card, CardContent, Button, Dialog,
   DialogContent, DialogActions, TextField, IconButton, Snackbar,
   Alert, Stack, InputAdornment, Divider, Avatar, Chip, MenuItem,
-  Select, FormControl, InputLabel, Tooltip,
+  Select, FormControl, InputLabel, Tooltip, CircularProgress,
 } from "@mui/material";
 import {
   Add, Delete, Edit, Search, Close, Person,
   Phone, LocationOn, Email, AdminPanelSettings,
   Shield, HealthAndSafety, Groups, SupervisorAccount,
-  ManageAccounts, FilterList, CheckCircle,
+  ManageAccounts, FilterList,
 } from "@mui/icons-material";
 
+import { useAuth } from "../context/authContext";
 import api from "../api/axios";
 
 // ── Role config ───────────────────────────────────────────────────────────────
@@ -53,23 +54,18 @@ const ROLES = {
   },
 };
 
-// // ── Mock data ─────────────────────────────────────────────────────────────────
-// const MOCK_USERS = [
-//   { id: 1, name: "Ashan Perera",    email: "ashan@example.com",  phone_number: "+94 77 123 4567", role: "admin",              address: "12 Galle Rd",         district: "Colombo",  latitude: 6.9271,  longitude: 79.8612, created_at: "2024-01-15" },
-//   { id: 2, name: "Nimasha Silva",   email: "nimasha@example.com", phone_number: "+94 76 234 5678", role: "programme_manager",  address: "45 Kandy Rd",         district: "Kandy",    latitude: 7.2906,  longitude: 80.6337, created_at: "2024-02-20" },
-//   { id: 3, name: "Kasun Fernando",  email: "kasun@example.com",  phone_number: "+94 75 345 6789", role: "treatment_provider", address: "78 Hospital Ave",     district: "Galle",    latitude: 6.0535,  longitude: 80.2210, created_at: "2024-03-10" },
-//   { id: 4, name: "Dilani Jayawardena", email: "dilani@example.com", phone_number: "+94 71 456 7890", role: "chw",            address: "23 Temple St",        district: "Matara",   latitude: 5.9549,  longitude: 80.5550, created_at: "2024-03-18" },
-//   { id: 5, name: "Ruwan Bandara",   email: "ruwan@example.com",  phone_number: "+94 70 567 8901", role: "community",          address: "56 Main St",          district: "Kurunegala", latitude: 7.4867, longitude: 80.3647, created_at: "2024-04-05" },
-//   { id: 6, name: "Sachini Rathnayake", email: "sachini@example.com", phone_number: "+94 72 678 9012", role: "chw",          address: "34 Lake Rd",          district: "Ratnapura", latitude: 6.6828, longitude: 80.3992, created_at: "2024-04-22" },
-// ];
-
 const emptyForm = {
-  name: "", email: "", phone_number: "", role: "community",
-  address: "", district: "", latitude: "", longitude: "",
+  name: "",
+  email: "",
+  phone_number: "",
+  role: "community",
+  address: "",
+  district: "",
+  latitude: "",
+  longitude: "",
 };
 
-// ── Avatar colour from name ───────────────────────────────────────────────────
-const AVATAR_COLORS = ["#818cf8","#10b981","#f59e0b","#ef4444","#3b82f6","#ec4899","#8b5cf6","#06b6d4"];
+const AVATAR_COLORS = ["#818cf8", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899", "#8b5cf6", "#06b6d4"];
 const avatarColor = (name) => AVATAR_COLORS[(name?.charCodeAt(0) ?? 0) % AVATAR_COLORS.length];
 
 // ── Role Badge ────────────────────────────────────────────────────────────────
@@ -107,7 +103,7 @@ function StatCard({ value, label, color }) {
 }
 
 // ── User Card ─────────────────────────────────────────────────────────────────
-function UserCard({ user, onEdit, onDelete, onRoleChange }) {
+function UserCard({ user, onEdit, onDelete, onRoleChange, isLoading }) {
   const color = avatarColor(user.name);
   const roleCfg = ROLES[user.role] || ROLES.community;
 
@@ -116,7 +112,9 @@ function UserCard({ user, onEdit, onDelete, onRoleChange }) {
       borderRadius: "20px", boxShadow: "0px 4px 20px rgba(0,0,0,0.08)",
       border: "none", overflow: "hidden",
       transition: "transform 0.2s, box-shadow 0.2s",
-      "&:hover": { transform: "translateY(-3px)", boxShadow: "0px 12px 32px rgba(0,0,0,0.12)" },
+      opacity: isLoading ? 0.6 : 1,
+      pointerEvents: isLoading ? "none" : "auto",
+      "&:hover": { transform: !isLoading && "translateY(-3px)", boxShadow: "0px 12px 32px rgba(0,0,0,0.12)" },
     }}>
       {/* Header band */}
       <Box sx={{
@@ -124,7 +122,7 @@ function UserCard({ user, onEdit, onDelete, onRoleChange }) {
         background: `linear-gradient(135deg, ${color}33 0%, ${color}11 100%)`,
         borderBottom: `2px solid ${color}22`,
       }}>
-        {/* Role quick-change badge top-left */}
+        {/* Role badge top-left */}
         <Box sx={{ position: "absolute", top: 12, left: 14 }}>
           <RoleBadge role={user.role} />
         </Box>
@@ -133,8 +131,9 @@ function UserCard({ user, onEdit, onDelete, onRoleChange }) {
         <IconButton
           size="small"
           onClick={() => onDelete(user.id)}
+          disabled={isLoading}
           sx={{ position: "absolute", top: 8, right: 8, bgcolor: "rgba(255,255,255,0.8)", color: "#ff6b6b", "&:hover": { bgcolor: "#fff5f5" }, boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}>
-          <Delete sx={{ fontSize: 16 }} />
+          {isLoading ? <CircularProgress size={16} /> : <Delete sx={{ fontSize: 16 }} />}
         </IconButton>
 
         {/* Avatar overlapping the band */}
@@ -192,6 +191,7 @@ function UserCard({ user, onEdit, onDelete, onRoleChange }) {
           <Select
             value={user.role}
             onChange={e => onRoleChange(user.id, e.target.value)}
+            disabled={isLoading}
             size="small"
             fullWidth
             sx={{
@@ -221,13 +221,15 @@ function UserCard({ user, onEdit, onDelete, onRoleChange }) {
         <Stack direction="row" spacing={1.5}>
           <Button fullWidth variant="outlined"
             onClick={() => onEdit(user)}
+            disabled={isLoading}
             startIcon={<Edit sx={{ fontSize: 15 }} />}
             sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 700, borderColor: "#eee", color: "#1a233a", "&:hover": { borderColor: "#1a233a", bgcolor: "#f8f9fa" } }}>
             Edit
           </Button>
           <Button fullWidth variant="contained"
             onClick={() => onDelete(user.id)}
-            startIcon={<Delete sx={{ fontSize: 15 }} />}
+            disabled={isLoading}
+            startIcon={isLoading ? <CircularProgress size={15} /> : <Delete sx={{ fontSize: 15 }} />}
             sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 700, bgcolor: "#fff0f0", color: "#ff6b6b", boxShadow: "none", "&:hover": { bgcolor: "#ffe0e0", boxShadow: "none" } }}>
             Remove
           </Button>
@@ -239,165 +241,226 @@ function UserCard({ user, onEdit, onDelete, onRoleChange }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function Users() {
-  const [users, setUsers]         = useState([]); // start with empty, will load from API
-  const [search, setSearch]       = useState("");
+  const { user: currentUser } = useAuth(); // Gets JWT payload: { user_id, name, role, ... }
+
+  const [users, setUsers] = useState([]);
+  const [search, setSearch] = useState("");
   const [filterRole, setFilterRole] = useState("all");
   const [openDialog, setOpenDialog] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [form, setForm]           = useState(emptyForm);
-  const [deleteConfirm, setDeleteConfirm] = useState(null); // user id pending delete
-  const [snack, setSnack]         = useState({ open: false, message: "", severity: "success" });
+  const [form, setForm] = useState(emptyForm);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [snack, setSnack] = useState({ open: false, message: "", severity: "success" });
+  const [loading, setLoading] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState({});
 
   const theme = { primary: "#1a233a", bg: "#f8f9fa", inputBg: "#f4f7f9", cardShadow: "0px 4px 20px rgba(0,0,0,0.08)" };
 
   const showSnack = (message, severity = "success") => setSnack({ open: true, message, severity });
-   useEffect(() => {
-  const fetchUsers = async () => {
+
+  // Debug: Log current user
+  useEffect(() => {
+    if (currentUser) {
+      console.log("✅ Current user loaded from auth context:", currentUser);
+    } else {
+      console.warn("⚠️ No user in auth context. Make sure you're logged in.");
+    }
+  }, [currentUser]);
+
+  // Fetch users on mount
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = useCallback(async () => {
+    setLoading(true);
     try {
-      const response = await api.get(
-        "users/users.php?action=getAll&limit=10"
-      );
-      console.log(response.data);
-      
-      if (response.data.success) {  
-        setUsers(response.data.data); 
+      const response = await api.get("/users/users.php?action=getAll&limit=100");
+
+      if (response.data.success) {
+        setUsers(response.data.data || []);
+        console.log("✅ Users fetched:", response.data.data?.length || 0);
+      } else {
+        showSnack("Failed to load users", "error");
+        console.error("❌ Error:", response.data.message);
       }
     } catch (err) {
-      showSnack("Failed to load users", "error");
+      showSnack("Server error loading users", "error");
+      console.error("❌ Network error:", err);
+    } finally {
+      setLoading(false);
     }
-  };
+  }, []);
 
-  fetchUsers();
-}, []);
+  // Generic API handler
+  const callAPI = useCallback(async (action, method = "POST", data = {}, params = {}) => {
+    try {
+      const response = await api({
+        method,
+        url: "/users/users.php",
+        params: { action, ...params },
+        data,
+      });
 
-//  API call
-    const handleAction = async ({
-  action,
-  method = "POST",
-  data = {},
-  params = {},
-  successMessage
-}) => {
-  try {
-    const response = await api({
-      method,
-      url: "/users/users.php",
-      params: { action, ...params },
-      data
+      if (!response.data.success) {
+        throw new Error(response.data.message || "Action failed");
+      }
+
+      return response.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.message || error.message || "Server error");
+    }
+  }, []);
+
+  // Filtered users
+  const filtered = useMemo(() => {
+    return users.filter(u => {
+      const matchSearch =
+        u.name.toLowerCase().includes(search.toLowerCase()) ||
+        u.email.toLowerCase().includes(search.toLowerCase()) ||
+        (u.district || "").toLowerCase().includes(search.toLowerCase());
+      const matchRole = filterRole === "all" || u.role === filterRole;
+      return matchSearch && matchRole;
     });
+  }, [users, search, filterRole]);
 
-    if (response.data.success) {
-      console.log(response.data);
-      showSnack(successMessage || response.data.message, "success");
-    } else {
-      console.log(response.data);
-      
-      showSnack(response.data.message || "Action failed", "error");
-    }
-
-  } catch (error) {
-    showSnack("Server error", "error");
-  }
-};
-
-
-  // ── Filtered + searched users ─────────────────────────────────────────────
-    const filtered = useMemo(() => users.filter(u => {
-    const matchSearch =
-      u.name.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase()) ||
-      (u.district || "").toLowerCase().includes(search.toLowerCase());
-    const matchRole = filterRole === "all" || u.role === filterRole;
-    return matchSearch && matchRole;
-  }), [users, search, filterRole]);
-
-  // ── Stats ─────────────────────────────────────────────────────────────────
+  // Stats
   const stats = useMemo(() => [
-    { label: "Total Users",          value: users.length,                                          color: "#9c8fff" },
-    { label: "Admins",               value: users.filter(u => u.role === "admin").length,           color: "#ff6b6b" },
-    { label: "CHW",                  value: users.filter(u => u.role === "chw").length,             color: "#00d4aa" },
-    { label: "Treatment Providers",  value: users.filter(u => u.role === "treatment_provider").length, color: "#ffb347" },
+    { label: "Total Users", value: users.length, color: "#9c8fff" },
+    { label: "Admins", value: users.filter(u => u.role === "admin").length, color: "#ff6b6b" },
+    { label: "CHW", value: users.filter(u => u.role === "chw").length, color: "#00d4aa" },
+    { label: "Treatment Providers", value: users.filter(u => u.role === "treatment_provider").length, color: "#ffb347" },
   ], [users]);
 
-
-  // ── Open Add dialog ───────────────────────────────────────────────────────
   const handleOpenAdd = () => {
     setEditingId(null);
     setForm(emptyForm);
     setOpenDialog(true);
   };
 
-  // ── Open Edit dialog ──────────────────────────────────────────────────────
   const handleOpenEdit = (user) => {
     setEditingId(user.id);
     setForm({
-      name:         user.name         || "",
-      email:        user.email        || "",
+      name: user.name || "",
+      email: user.email || "",
       phone_number: user.phone_number || "",
-      role:         user.role         || "community",
-      address:      user.address      || "",
-      district:     user.district     || "",
+      role: user.role || "community",
+      address: user.address || "",
+      district: user.district || "",
+      latitude: user.latitude || "",
+      longitude: user.longitude || "",
     });
     setOpenDialog(true);
   };
 
-  // ── Save (add or update) ──────────────────────────────────────────────────
-const handleSave = async () => {
-  if (!form.name.trim()) {
-    showSnack("Name is required", "error");
-    return;
-  }
-
-  if (!form.email.trim()) {
-    showSnack("Email is required", "error");
-    return;
-  }
-const Editor = JSON.parse(localStorage.getItem("user"));
-  try {
-    if (editingId) {
-      await handleAction({
-        action: "update",
-        data: { id: editingId, editorId: Editor.id, ...form },
-        successMessage: "User updated successfully"
-      });
-    } else {
-      await handleAction({
-        action: "create", // ensure backend matches this
-        data: form,
-        successMessage: "User added successfully"
-      });
+  const handleSave = async () => {
+    // Validation
+    if (!form.name.trim()) {
+      showSnack("Name is required", "error");
+      return;
     }
-    setOpenDialog(false);
-    setEditingId(null);
+    if (!form.email.trim()) {
+      showSnack("Email is required", "error");
+      return;
+    }
+    if (form.phone_number && !/^\d{10}$/.test(form.phone_number)) {
+      showSnack("Phone number must be exactly 10 digits", "error");
+      return;
+    }
 
-  } catch (err) {
-    showSnack("Server error", "error");
-  }
-};
+    // ✅ Use currentUser.id from auth context
+    if (!currentUser || !currentUser.id) {
+      showSnack("User not logged in. Please log in again.", "error");
+      return;
+    }
 
-  // ── Role change directly from card ────────────────────────────────────────
-  const handleRoleChange = (id, newRole) => {
+    try {
+      setLoading(true);
+
+      if (editingId) {
+        await callAPI("update", "POST", {
+          id: editingId,
+          editorId: currentUser.id, // ← Auth context has 'id', not 'user_id'
+          ...form,
+        });
+        showSnack("User updated successfully", "success");
+      } else {
+        await callAPI("create", "POST", form);
+        showSnack("User added successfully", "success");
+      }
+
+      setOpenDialog(false);
+      setEditingId(null);
+      setForm(emptyForm);
+
+      // Refetch users
+      await fetchUsers();
+    } catch (err) {
+      showSnack(err.message || "Server error", "error");
+      console.error("❌ Save error:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle role change with server sync
+  const handleRoleChange = async (id, newRole) => {
+    const oldUser = users.find(u => u.id === id);
+    const oldRole = oldUser?.role;
+
+    // Optimistic update
     setUsers(prev => prev.map(u => u.id === id ? { ...u, role: newRole } : u));
-    showSnack(`Role updated to ${ROLES[newRole]?.label}`);
+
+    if (!currentUser || !currentUser.id) {
+      showSnack("User not logged in", "error");
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, role: oldRole } : u));
+      return;
+    }
+
+    try {
+      setLoadingUsers(prev => ({ ...prev, [id]: true }));
+
+      await callAPI("update", "POST", {
+        id,
+        editorId: currentUser.id, // ← Auth context has 'id'
+        name: oldUser.name,
+        role: newRole,
+        phone_number: oldUser.phone_number,
+        address: oldUser.address,
+        district: oldUser.district,
+      });
+
+      showSnack(`Role updated to ${ROLES[newRole]?.label || newRole}`, "success");
+    } catch (err) {
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, role: oldRole } : u));
+      showSnack(err.message || "Failed to update role", "error");
+    } finally {
+      setLoadingUsers(prev => ({ ...prev, [id]: false }));
+    }
   };
 
-  // ── Delete ────────────────────────────────────────────────────────────────
-  const handleDeleteConfirm = () => {
-    const deleteUser = (id) => {
-    handleAction({
-      action: "delete",
-      data: { id },
-      successMessage: "User deleted successfully"
-    });
-  };
-  deleteUser(deleteConfirm);
-    setUsers(prev => prev.filter(u => u.id !== deleteConfirm));
-    setDeleteConfirm(null);
+  // Handle delete
+  const handleDeleteConfirm = async () => {
+    const userId = deleteConfirm;
+    const userName = users.find(u => u.id === userId)?.name;
+
+    try {
+      setLoadingUsers(prev => ({ ...prev, [userId]: true }));
+
+      await callAPI("delete", "POST", { id: userId });
+
+      setUsers(prev => prev.filter(u => u.id !== userId));
+      showSnack(`${userName} removed successfully`, "success");
+    } catch (err) {
+      showSnack(err.message || "Failed to delete user", "error");
+    } finally {
+      setLoadingUsers(prev => ({ ...prev, [userId]: false }));
+      setDeleteConfirm(null);
+    }
   };
 
   return (
     <Box sx={{ bgcolor: theme.bg, minHeight: "100vh", pb: 6 }}>
-
       {/* ── Header ── */}
       <Box sx={{ p: 4 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
@@ -409,7 +472,7 @@ const Editor = JSON.parse(localStorage.getItem("user"));
               User Management &amp; Role Assignment
             </Typography>
           </Box>
-          <Button variant="contained" startIcon={<Add />} onClick={handleOpenAdd}
+          <Button variant="contained" startIcon={<Add />} onClick={handleOpenAdd} disabled={loading}
             sx={{ bgcolor: theme.primary, borderRadius: "10px", textTransform: "none", px: 3, fontWeight: 700 }}>
             Add User
           </Button>
@@ -463,27 +526,35 @@ const Editor = JSON.parse(localStorage.getItem("user"));
 
       {/* ── User Cards ── */}
       <Box sx={{ px: 4 }}>
-        {filtered.length === 0 && (
+        {loading ? (
+          <Box sx={{ textAlign: "center", mt: 8 }}>
+            <CircularProgress />
+            <Typography variant="body2" sx={{ mt: 2, color: "#aaa" }}>
+              Loading users...
+            </Typography>
+          </Box>
+        ) : filtered.length === 0 ? (
           <Box sx={{ textAlign: "center", mt: 8 }}>
             <Person sx={{ fontSize: 56, color: "#ddd" }} />
             <Typography variant="body1" fontWeight={600} sx={{ mt: 1, color: "#aaa" }}>
               {search || filterRole !== "all" ? "No users match your filters" : "No users yet — click Add User"}
             </Typography>
           </Box>
+        ) : (
+          <Grid container spacing={3}>
+            {filtered.map(user => (
+              <Grid item key={user.id} xs={12} sm={6} lg={4} xl={3}>
+                <UserCard
+                  user={user}
+                  onEdit={handleOpenEdit}
+                  onDelete={id => setDeleteConfirm(id)}
+                  onRoleChange={handleRoleChange}
+                  isLoading={loadingUsers[user.id] || false}
+                />
+              </Grid>
+            ))}
+          </Grid>
         )}
-
-        <Grid container spacing={3}>
-          {filtered.map(user => (
-            <Grid item key={user.id} xs={12} sm={6} lg={4} xl={3}>
-              <UserCard
-                user={user}
-                onEdit={handleOpenEdit}
-                onDelete={id => setDeleteConfirm(id)}
-                onRoleChange={handleRoleChange}
-              />
-            </Grid>
-          ))}
-        </Grid>
       </Box>
 
       {/* ── Add / Edit Dialog ── */}
@@ -517,12 +588,14 @@ const Editor = JSON.parse(localStorage.getItem("user"));
             <Stack direction="row" spacing={2}>
               <TextField label="Full Name *" fullWidth value={form.name}
                 onChange={e => setForm({ ...form, name: e.target.value })}
+                disabled={loading}
                 InputProps={{ sx: { borderRadius: "10px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } } }}
                 InputLabelProps={{ shrink: true }} />
 
               <FormControl fullWidth>
                 <InputLabel shrink sx={{ bgcolor: "#fcfdfe", px: 0.5 }}>Role *</InputLabel>
                 <Select value={form.role} onChange={e => setForm({ ...form, role: e.target.value })}
+                  disabled={loading}
                   label="Role *"
                   sx={{ borderRadius: "10px", bgcolor: theme.inputBg, "& fieldset": { border: "none" }, fontWeight: 600, color: ROLES[form.role]?.color }}>
                   {Object.entries(ROLES).map(([key, cfg]) => (
@@ -539,21 +612,39 @@ const Editor = JSON.parse(localStorage.getItem("user"));
 
             <TextField label="Email Address *" fullWidth type="email" value={form.email}
               onChange={e => setForm({ ...form, email: e.target.value })}
+              disabled={loading}
               InputProps={{ sx: { borderRadius: "10px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } } }}
               InputLabelProps={{ shrink: true }} />
 
             <TextField label="Phone Number" fullWidth value={form.phone_number}
               onChange={e => setForm({ ...form, phone_number: e.target.value })}
+              disabled={loading}
+              placeholder="10 digit number"
               InputProps={{ sx: { borderRadius: "10px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } } }}
               InputLabelProps={{ shrink: true }} />
 
             <Stack direction="row" spacing={2}>
               <TextField label="District" fullWidth value={form.district}
                 onChange={e => setForm({ ...form, district: e.target.value })}
+                disabled={loading}
                 InputProps={{ sx: { borderRadius: "10px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } } }}
                 InputLabelProps={{ shrink: true }} />
               <TextField label="Address" fullWidth value={form.address}
                 onChange={e => setForm({ ...form, address: e.target.value })}
+                disabled={loading}
+                InputProps={{ sx: { borderRadius: "10px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } } }}
+                InputLabelProps={{ shrink: true }} />
+            </Stack>
+
+            <Stack direction="row" spacing={2}>
+              <TextField label="Latitude" fullWidth type="number" value={form.latitude}
+                onChange={e => setForm({ ...form, latitude: e.target.value })}
+                disabled={loading}
+                InputProps={{ sx: { borderRadius: "10px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } } }}
+                InputLabelProps={{ shrink: true }} />
+              <TextField label="Longitude" fullWidth type="number" value={form.longitude}
+                onChange={e => setForm({ ...form, longitude: e.target.value })}
+                disabled={loading}
                 InputProps={{ sx: { borderRadius: "10px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } } }}
                 InputLabelProps={{ shrink: true }} />
             </Stack>
@@ -566,7 +657,7 @@ const Editor = JSON.parse(localStorage.getItem("user"));
             sx={{ color: "text.secondary", textTransform: "none", fontWeight: 700 }}>
             Cancel
           </Button>
-          <Button variant="contained" onClick={handleSave}
+          <Button variant="contained" onClick={handleSave} disabled={loading}
             sx={{ bgcolor: theme.primary, px: 4, borderRadius: "10px", textTransform: "none", fontWeight: 700 }}>
             {editingId ? "Save Changes" : "Add User"}
           </Button>
@@ -601,9 +692,9 @@ const Editor = JSON.parse(localStorage.getItem("user"));
             sx={{ color: "text.secondary", textTransform: "none", fontWeight: 700 }}>
             Cancel
           </Button>
-          <Button variant="contained" onClick={handleDeleteConfirm}
+          <Button variant="contained" onClick={handleDeleteConfirm} disabled={loadingUsers[deleteConfirm]}
             sx={{ bgcolor: "#ff6b6b", px: 3, borderRadius: "10px", textTransform: "none", fontWeight: 700, boxShadow: "none", "&:hover": { bgcolor: "#e05555", boxShadow: "none" } }}>
-            Yes, Remove
+            {loadingUsers[deleteConfirm] ? <CircularProgress size={20} /> : "Yes, Remove"}
           </Button>
         </DialogActions>
       </Dialog>

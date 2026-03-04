@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   Dialog, Box, Button, Typography, IconButton,
-  Chip, Stack, Divider, CircularProgress, Tooltip
+  Chip, Stack, Divider, CircularProgress, Tooltip, Alert
 } from "@mui/material";
 import {
   MyLocation, Close, LocalHospital, NavigateNext,
@@ -9,6 +9,7 @@ import {
   FmdGood, Phone, DirectionsCar, FullscreenExit, Fullscreen
 } from "@mui/icons-material";
 import HospitalMap from "./HospitalMap";
+import api from "../../api/axios";
 
 const haversine = (lat1, lon1, lat2, lon2) => {
   const R = 6371;
@@ -29,12 +30,15 @@ export default function NearbyHospitalsDialog({
   onAddHospital,
   savedHospitals = [],
 }) {
-  const [center, setCenter]                   = useState({ lat: 6.9271, lng: 79.8612 });
-  const [locating, setLocating]               = useState(false);
-  const [locError, setLocError]               = useState("");
-  const [userPos, setUserPos]                 = useState(null);
+  const [center, setCenter] = useState({ lat: 6.9271, lng: 79.8612 });
+  const [locating, setLocating] = useState(false);
+  const [locError, setLocError] = useState("");
+  const [userPos, setUserPos] = useState(null);
   const [selectedHospital, setSelectedHospital] = useState(initialSelected || null);
-  const [fullscreen, setFullscreen]           = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [loadingAdd, setLoadingAdd] = useState(null); // Track which hospital is being added
+  const [addedHospitals, setAddedHospitals] = useState(new Set()); // Track added hospitals
+  const [snack, setSnack] = useState({ open: false, message: "", severity: "success" });
 
   // Sync external selectedHospital
   useEffect(() => { setSelectedHospital(initialSelected || null); }, [initialSelected]);
@@ -43,6 +47,10 @@ export default function NearbyHospitalsDialog({
   useEffect(() => {
     if (!open) { setLocError(""); setSelectedHospital(null); }
   }, [open]);
+
+  const showSnack = (message, severity = "success") => {
+    setSnack({ open: true, message, severity });
+  };
 
   const handleUseMyLocation = () => {
     if (!navigator.geolocation) { setLocError("Geolocation not supported"); return; }
@@ -59,13 +67,90 @@ export default function NearbyHospitalsDialog({
     );
   };
 
+  // ── Handle adding hospital from OSM to database ──────────────────────────
+  const handleAddFromMap = async (hospitalData) => {
+    if (!hospitalData || !hospitalData.name) {
+      showSnack("Invalid hospital data", "error");
+      return;
+    }
+
+    // Check if already in saved hospitals
+    const alreadyExists = savedHospitals.some(
+      h => h.name.toLowerCase() === hospitalData.name.toLowerCase()
+    );
+
+    if (alreadyExists) {
+      showSnack("Hospital already in database", "warning");
+      return;
+    }
+
+    const osmId = `osm_${hospitalData.id}`;
+
+    try {
+      setLoadingAdd(osmId);
+
+      // Send to backend API
+      const response = await api.post("/hospitals/hospitals.php?action=create", {
+        name: hospitalData.name,
+        address: hospitalData.address || "From OpenStreetMap",
+        latitude: parseFloat(hospitalData.lat),
+        longitude: parseFloat(hospitalData.lng),
+        contact_number: hospitalData.contact_number || null,
+        district: null, // User can edit this later
+      });
+
+      if (response.data.success) {
+        // Prepare data for UI update
+        const newHospital = {
+          id: response.data.data?.id || Date.now(),
+          name: hospitalData.name,
+          address: hospitalData.address || "From OpenStreetMap",
+          latitude: parseFloat(hospitalData.lat),
+          longitude: parseFloat(hospitalData.lng),
+          contact_number: hospitalData.contact_number || null,
+          district: null,
+          created_at: new Date().toISOString(),
+          lat: parseFloat(hospitalData.lat),
+          lng: parseFloat(hospitalData.lng),
+        };
+
+        // Notify parent component to update UI
+        onAddHospital(newHospital);
+
+        // Track as added
+        setAddedHospitals(prev => new Set([...prev, osmId]));
+
+        showSnack(`✅ ${hospitalData.name} added to database!`, "success");
+      } else {
+        showSnack(response.data.message || "Failed to add hospital", "error");
+      }
+    } catch (err) {
+      showSnack(
+        err.response?.data?.message || "Server error adding hospital",
+        "error"
+      );
+      console.error("Add hospital error:", err);
+    } finally {
+      setLoadingAdd(null);
+    }
+  };
+
   // Hospitals sorted by distance if userPos available
   const sortedHospitals = userPos
     ? [...savedHospitals]
-        .filter(h => h.lat && h.lng)
-        .map(h => ({ ...h, dist: parseFloat(haversine(userPos.lat, userPos.lng, h.lat, h.lng)) }))
-        .sort((a, b) => a.dist - b.dist)
-    : savedHospitals.filter(h => h.lat && h.lng);
+      .filter(h => h.latitude && h.longitude)
+      .map(h => ({
+        ...h,
+        lat: h.latitude,
+        lng: h.longitude,
+        dist: parseFloat(haversine(userPos.lat, userPos.lng, h.latitude, h.longitude))
+      }))
+      .sort((a, b) => a.dist - b.dist)
+    : savedHospitals.filter(h => h.latitude && h.longitude).map(h => ({
+      ...h,
+      lat: h.latitude,
+      lng: h.longitude,
+    }));
 
   return (
     <Dialog
@@ -321,9 +406,9 @@ export default function NearbyHospitalsDialog({
           <Box sx={{ width: "100%", height: "100%" }}>
             <HospitalMap
               center={center}
-              savedHospitals={savedHospitals}
+              savedHospitals={sortedHospitals}
               selectedHospital={selectedHospital}
-              onAddHospital={onAddHospital}
+              onAddHospital={handleAddFromMap}
             />
           </Box>
 
@@ -391,6 +476,30 @@ export default function NearbyHospitalsDialog({
           )}
         </Box>
       </Box>
+
+      {/* Snackbar for add feedback */}
+      {snack.open && (
+        <Box
+          sx={{
+            position: "fixed",
+            bottom: 16,
+            right: 16,
+            zIndex: 2000,
+          }}
+        >
+          <Alert
+            severity={snack.severity}
+            variant="filled"
+            onClose={() => setSnack({ ...snack, open: false })}
+            sx={{
+              borderRadius: "10px",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            }}
+          >
+            {snack.message}
+          </Alert>
+        </Box>
+      )}
 
       {/* Pulse animation keyframe */}
       <style>{`
