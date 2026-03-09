@@ -34,20 +34,12 @@ import {
   Settings,
   Inventory,
   CheckCircle,
+
 } from "@mui/icons-material";
 
-const drawerWidth = 260;
+import { getMenuForRole } from "../hooks/usePermissions";
 
-const menuItems = [
-  { text: "Dashboard", icon: <Dashboard />, path: "/dashboard" },
-  { text: "Hospitals", icon: <LocalHospital />, path: "/hospitals" },
-  { text: "ASV Stock", icon: <Inventory />, path: "/asv-stock" },
-  { text: "Snake Rescuers", icon: <People />, path: "/snake-rescuers" },
-  { text: "Snake Species", icon: <Pets />, path: "/snakes" },
-  { text: "Users", icon: <Person />, path: "/users" },
-  { text: "Audit Logs", icon: <Report />, path: "/audit-logs" },
-  { text: "Rescuer Verification", icon: <CheckCircle />, path: "/rescuer-verification" },
-];
+const drawerWidth = 280;
 
 export default function MainLayout() {
   const theme = useTheme();
@@ -58,6 +50,7 @@ export default function MainLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+  const menuItems = getMenuForRole(user?.role);
 
   // Silent real-time notifications hook
   // No loading state, no spinners - just background polling
@@ -86,7 +79,7 @@ export default function MainLayout() {
   const drawer = (
     <Box>
       <Toolbar sx={{
-        background: "linear-gradient(135deg, #047857 0%, #10b981 100%)",
+        background: "linear-gradient(135deg, #1a1f36 0%, #2e3a59 100%)",
         color: "white",
         minHeight: 70,
       }}>
@@ -105,24 +98,33 @@ export default function MainLayout() {
                 if (isMobile) setMobileOpen(false);
               }}
               sx={{
+                mx: 1,
+                borderRadius: "10px",
+                mb: 0.5,
                 "&.Mui-selected": {
-                  backgroundColor: "rgba(16, 185, 129, 0.1)",
-                  borderRight: "3px solid #10b981",
-                  color: "#10b981",
-                  fontWeight: 700,
+                  backgroundColor: "#1a1f36",
+                  color: "white",
+                  "& .MuiListItemIcon-root": { color: "white" },
+                  "& .MuiTypography-root": { fontWeight: 700 },
+                  boxShadow: "0 4px 12px rgba(26, 31, 54, 0.3)",
+                },
+                "&.Mui-selected:hover": {
+                  backgroundColor: "#2e3a59",
                 },
                 "&:hover": {
-                  backgroundColor: "rgba(16, 185, 129, 0.05)",
+                  backgroundColor: "rgba(26, 31, 54, 0.08)",
                 },
-                transition: "all 0.2s ease",
+                transition: "all 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
               }}
             >
               <ListItemIcon sx={{
-                color: location.pathname === item.path ? "#10b981" : "#6b7280",
+                color: location.pathname === item.path ? "#1a1f36" : "#6b7280",
               }}>
-                {item.icon}
+                <Box sx={{ display: 'flex' }}>
+                  {item.icon}
+                </Box>
               </ListItemIcon>
-              <ListItemText primary={item.text} />
+              <ListItemText primary={item.label} />
             </ListItemButton>
           </ListItem>
         ))}
@@ -138,9 +140,9 @@ export default function MainLayout() {
         sx={{
           width: { md: `calc(100% - ${drawerWidth}px)` },
           ml: { md: `${drawerWidth}px` },
-          background: "linear-gradient(135deg, #047857 0%, #10b981 100%)",
+          background: "linear-gradient(135deg, #1a1f36 0%, #2e3a59 100%)",
           borderRadius: "0",
-          boxShadow: "0 4px 20px rgba(16, 185, 129, 0.2)",
+          boxShadow: "0 4px 20px rgba(26, 31, 54, 0.2)",
         }}
       >
         <Toolbar>
@@ -156,7 +158,7 @@ export default function MainLayout() {
             variant="h6"
             sx={{ flexGrow: 1, color: "#fff", fontWeight: 800 }}
           >
-            {menuItems.find((item) => item.path === location.pathname)?.text || "Dashboard"}
+            {menuItems.find((item) => item.path === location.pathname)?.label || "Dashboard"}
           </Typography>
 
           {/* 
@@ -177,10 +179,10 @@ export default function MainLayout() {
           {/* Profile Menu */}
           <IconButton onClick={handleProfileMenuOpen}>
             <Avatar sx={{
-              bgcolor: "#d1fae5",
-              color: "#047857",
+              bgcolor: "rgba(26, 31, 54, 0.1)",
+              color: "#1a1f36",
               fontWeight: 800,
-              boxShadow: "0 2px 8px rgba(16, 185, 129, 0.3)",
+              boxShadow: "0 2px 8px rgba(26, 31, 54, 0.1)",
             }}>
               {user?.name?.charAt(0)?.toUpperCase() || "U"}
             </Avatar>
@@ -192,8 +194,12 @@ export default function MainLayout() {
             onClose={handleProfileMenuClose}
             PaperProps={{
               sx: {
-                borderRadius: "12px",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
+                borderRadius: "14px",
+                boxShadow: "0 10px 40px rgba(0,0,0,0.15)",
+                mt: 1.5,
+                border: "1px solid rgba(26, 31, 54, 0.08)",
+                minWidth: 200,
+                "& .MuiList-root": { p: 1 },
               },
             }}
           >
@@ -203,13 +209,15 @@ export default function MainLayout() {
                 handleProfileMenuClose();
               }}
               sx={{
-                color: "#1a1f36",
-                fontWeight: 600,
-                "&:hover": { bgcolor: "rgba(16, 185, 129, 0.1)" },
+                borderRadius: "8px",
+                py: 1,
+                "&:hover": { bgcolor: "rgba(26, 31, 54, 0.04)" },
               }}
             >
-              <Person fontSize="small" sx={{ mr: 1, color: "#10b981" }} />
-              Profile
+              <ListItemIcon>
+                <Person fontSize="small" sx={{ color: "#1a1f36" }} />
+              </ListItemIcon>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: "#1a1f36" }}>Profile</Typography>
             </MenuItem>
             <MenuItem
               onClick={() => {
@@ -217,25 +225,30 @@ export default function MainLayout() {
                 handleProfileMenuClose();
               }}
               sx={{
-                color: "#1a1f36",
-                fontWeight: 600,
-                "&:hover": { bgcolor: "rgba(16, 185, 129, 0.1)" },
+                borderRadius: "8px",
+                py: 1,
+                "&:hover": { bgcolor: "rgba(26, 31, 54, 0.04)" },
               }}
             >
-              <Settings fontSize="small" sx={{ mr: 1, color: "#10b981" }} />
-              Settings
+              <ListItemIcon>
+                <Settings fontSize="small" sx={{ color: "#1a1f36" }} />
+              </ListItemIcon>
+              <Typography variant="body2" sx={{ fontWeight: 600, color: "#1a1f36" }}>Settings</Typography>
             </MenuItem>
-            <Divider sx={{ my: 0.5 }} />
+            <Divider sx={{ my: 1, opacity: 0.6 }} />
             <MenuItem
               onClick={handleLogout}
               sx={{
+                borderRadius: "8px",
+                py: 1,
                 color: "#ef4444",
-                fontWeight: 600,
-                "&:hover": { bgcolor: "rgba(239, 68, 68, 0.1)" },
+                "&:hover": { bgcolor: "rgba(239, 68, 68, 0.08)" },
               }}
             >
-              <Logout fontSize="small" sx={{ mr: 1 }} />
-              Logout
+              <ListItemIcon>
+                <Logout fontSize="small" sx={{ color: "#ef4444" }} />
+              </ListItemIcon>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>Logout</Typography>
             </MenuItem>
           </Menu>
         </Toolbar>
@@ -249,7 +262,11 @@ export default function MainLayout() {
           onClose={handleDrawerToggle}
           sx={{
             display: { xs: "block", md: "none" },
-            "& .MuiDrawer-paper": { width: drawerWidth },
+            "& .MuiDrawer-paper": {
+              width: drawerWidth,
+              borderRadius: 0,
+              border: "none",
+            },
           }}
         >
           {drawer}
@@ -260,7 +277,9 @@ export default function MainLayout() {
             display: { xs: "none", md: "block" },
             "& .MuiDrawer-paper": {
               width: drawerWidth,
-              borderRight: "1px solid rgba(16, 185, 129, 0.1)",
+              borderRadius: 0,
+              border: "none",
+              boxShadow: "4px 0 10px rgba(0,0,0,0.02)",
             },
           }}
           open
@@ -274,9 +293,9 @@ export default function MainLayout() {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
+          p: { xs: 2, sm: 3 },
           width: { md: `calc(100% - ${drawerWidth}px)` },
-          background: "linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)",
+          background: "#f8fafc",
           minHeight: "100vh",
         }}
       >

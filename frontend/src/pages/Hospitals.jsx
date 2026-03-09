@@ -3,13 +3,14 @@ import NearbyHospitalsDialog from "../components/map/NearbyHospitalsDialog";
 import {
   Box, Typography, Grid, Card, CardContent, Button, Dialog,
   DialogContent, DialogActions, TextField,
-  IconButton, Snackbar, Alert, Stack, InputAdornment, Divider, Chip, CircularProgress
+  IconButton, Snackbar, Alert, Stack, InputAdornment, Avatar, Paper, Divider, Chip, CircularProgress
 } from "@mui/material";
 import {
   Add, Delete, Map as MapIcon, Phone, LocationOn,
   Edit, Search, LocalHospital, Close, NearMe
 } from "@mui/icons-material";
 import api from "../api/axios";
+import { usePermissions } from "../hooks/usePermissions";
 
 const emptyForm = { name: "", address: "", district: "", contact_number: "", latitude: "", longitude: "" };
 
@@ -37,6 +38,8 @@ export default function Hospitals() {
   const [loading, setLoading] = useState(false);
   const [loadingHospitals, setLoadingHospitals] = useState({});
   const [userPos, setUserPos] = useState(null);
+  const [locating, setLocating] = useState(false);
+  const { check } = usePermissions();
 
   const theme = {
     primary: "#1a233a",
@@ -49,21 +52,44 @@ export default function Hospitals() {
   const showSnack = (message, severity = "success") =>
     setSnack({ open: true, message, severity });
 
-  // Get user location once on mount
-  useEffect(() => {
-    if (!navigator.geolocation) return;
+  // Get user location
+  const getUserLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      showSnack("Geolocation is not supported by your browser", "error");
+      return;
+    }
+
+    setLocating(true);
     navigator.geolocation.getCurrentPosition(
-      pos => setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => console.log("Location access denied")
+      pos => {
+        setUserPos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocating(false);
+        showSnack("Location updated successfully", "success");
+      },
+      (error) => {
+        let msg = "Could not get your location.";
+        if (error.code === 1) msg = "Location access denied. Please enable it in browser settings.";
+        else if (error.code === 2) msg = "Location unavailable accurately.";
+        else if (error.code === 3) msg = "Location request timed out.";
+
+        console.log("Location error:", msg);
+        setLocating(false);
+        showSnack(msg, "error");
+      },
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
     );
   }, []);
+
+  useEffect(() => {
+    getUserLocation();
+  }, [getUserLocation]);
 
   // Fetch hospitals from backend
   const fetchHospitals = useCallback(async () => {
     setLoading(true);
     try {
       const response = await api.get("/hospitals/hospitals.php?action=getAll&limit=100");
-      
+
       if (response.data.success) {
         setHospitals(response.data.data || []);
         console.log("✅ Hospitals fetched:", response.data.data?.length || 0);
@@ -93,8 +119,8 @@ export default function Hospitals() {
         params: { action, ...params },
         data,
       });
-      console.log("response",response.data);
-      
+      console.log("response", response.data);
+
       if (!response.data.success) {
         throw new Error(response.data.message || "Action failed");
       }
@@ -196,317 +222,411 @@ export default function Hospitals() {
   }, [hospitals, search]);
 
   return (
-    <Box sx={{ bgcolor: theme.bg, minHeight: "100vh", pb: 6 }}>
-
-      {/* ── Header ── */}
-      <Box sx={{ p: 4 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
-          <Box>
-            <Typography variant="h4" fontWeight={800} sx={{ color: theme.primary }}>
-              Hospitals
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Facility Network Management
-            </Typography>
-          </Box>
-          <Stack direction="row" spacing={2}>
-            <Button variant="outlined" startIcon={<MapIcon />} onClick={() => setMapOpen(true)}
-              sx={{ borderRadius: "10px", textTransform: "none", color: theme.primary, borderColor: "#ddd", bgcolor: "white" }}>
-              Open Map
-            </Button>
-            <Button variant="contained" startIcon={<Add />}
-              onClick={() => { setEditingId(null); setForm(emptyForm); setOpenDialog(true); }}
-              sx={{ bgcolor: theme.primary, borderRadius: "10px", textTransform: "none", px: 3, fontWeight: 700 }}>
-              Add Hospital
-            </Button>
-          </Stack>
-        </Stack>
-
-        {/* Search */}
-        <Box sx={{ mt: 4, p: 2.5, bgcolor: "white", borderRadius: "15px", boxShadow: theme.cardShadow }}>
-          <TextField
-            fullWidth
-            placeholder="Search by hospital name, location or district…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            InputProps={{
-              startAdornment: <InputAdornment position="start"><Search sx={{ color: "text.secondary" }} /></InputAdornment>,
-              sx: { borderRadius: "12px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } },
-            }}
+    <Box sx={{ p: { xs: 2, md: 3, lg: 4 } }}>
+      {/* Header */}
+      <Box sx={{ mb: 4, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+        <Box>
+          <Typography
+            variant="h4"
+            sx={{ fontWeight: 800, color: "#1a1f36", fontFamily: '"DM Sans", sans-serif', lineHeight: 1.2 }}
+          >
+            Hospital Network
+          </Typography>
+          <Typography sx={{ color: "#64748b", mt: 0.5, fontSize: '0.95rem' }}>
+            Manage medical facilities, locations, and network coordination
+          </Typography>
+        </Box>
+        <Stack direction="row" spacing={2} alignItems="center">
+          <Chip
+            label="Live · Healthcare"
+            size="small"
+            sx={{ background: '#10b98118', color: '#10b981', fontWeight: 700, border: '1px solid #10b98140' }}
           />
-        </Box>
-      </Box>
-
-      {/* ── Hospital Cards ── */}
-      <Box sx={{ px: 4 }}>
-        {loading ? (
-          <Box sx={{ textAlign: "center", mt: 8 }}>
-            <CircularProgress />
-            <Typography variant="body2" sx={{ mt: 2, color: "#aaa" }}>
-              Loading hospitals...
-            </Typography>
-          </Box>
-        ) : filtered.length === 0 ? (
-          <Box sx={{ textAlign: "center", mt: 8, color: "#aaa" }}>
-            <LocalHospital sx={{ fontSize: 56, opacity: 0.2 }} />
-            <Typography variant="body1" fontWeight={600} sx={{ mt: 1 }}>
-              {search ? "No hospitals match your search" : "No hospitals yet — click Add Hospital"}
-            </Typography>
-          </Box>
-        ) : (
-          <Grid container spacing={3}>
-            {filtered.map(h => {
-              // Calculate distance instantly
-              const dist =
-                userPos && h.latitude && h.longitude
-                  ? haversine(userPos.lat, userPos.lng, h.latitude, h.longitude)
-                  : null;
-
-              const isDeleting = loadingHospitals[h.id] || false;
-
-              return (
-                <Grid item key={h.id} xs={12} md={6} lg={4}>
-                  <Card sx={{
-                    borderRadius: "20px",
-                    boxShadow: theme.cardShadow,
-                    border: "none",
-                    overflow: "hidden",
-                    opacity: isDeleting ? 0.6 : 1,
-                    pointerEvents: isDeleting ? "none" : "auto",
-                    transition: "opacity 0.2s",
-                  }}>
-
-                    {/* Blue header band */}
-                    <Box sx={{ height: 140, bgcolor: "#dbeafe", position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <LocalHospital sx={{ fontSize: 56, color: "white", opacity: 0.8 }} />
-
-                      {/* Emergency badge */}
-                      <Box sx={{ position: "absolute", top: 14, left: 14, bgcolor: "#ff7675", color: "white", px: 1.5, py: 0.4, borderRadius: "20px", fontSize: "0.72rem", fontWeight: 700 }}>
-                        EMERGENCY
-                      </Box>
-
-                      {/* Distance badge */}
-                      {dist !== null && (
-                        <Chip
-                          icon={<NearMe sx={{ fontSize: "14px !important", color: "#1a233a !important" }} />}
-                          label={`${dist} km away`}
-                          size="small"
-                          sx={{
-                            position: "absolute", top: 14, right: 14,
-                            bgcolor: "rgba(255,255,255,0.92)", color: theme.primary,
-                            fontWeight: 700, fontSize: "0.72rem",
-                            backdropFilter: "blur(4px)",
-                            boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
-                          }}
-                        />
-                      )}
-
-                      {/* Delete button */}
-                      <IconButton
-                        onClick={() => handleDelete(h.id)}
-                        disabled={isDeleting}
-                        sx={{ position: "absolute", bottom: 10, right: 10, bgcolor: "white", color: "#ff7675", "&:hover": { bgcolor: "#fff5f5" }, boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}
-                        size="small"
-                      >
-                        {isDeleting ? <CircularProgress size={20} /> : <Delete fontSize="small" />}
-                      </IconButton>
-                    </Box>
-
-                    <CardContent sx={{ p: 3 }}>
-                      <Typography variant="h6" fontWeight={800} sx={{ mb: 1.5, color: theme.primary }}>
-                        {h.name}
-                      </Typography>
-
-                      <Stack spacing={1.2} sx={{ mb: 3 }}>
-                        {h.district && (
-                          <Chip
-                            label={h.district}
-                            size="small"
-                            sx={{ width: "fit-content", bgcolor: "#e0f2f1", color: "#00796b", fontWeight: 600, fontSize: "0.7rem" }}
-                          />
-                        )}
-                        <Typography variant="body2" display="flex" alignItems="center" gap={1} sx={{ color: "#636e72", fontWeight: 500 }}>
-                          <LocationOn sx={{ fontSize: 18, color: "#ff7675", flexShrink: 0 }} />
-                          {h.address || "Address not provided"}
-                        </Typography>
-                        <Typography variant="body2" display="flex" alignItems="center" gap={1} sx={{ color: "#636e72", fontWeight: 500 }}>
-                          <Phone sx={{ fontSize: 18, color: "#ff7675", flexShrink: 0 }} />
-                          {h.contact_number || "Contact not provided"}
-                        </Typography>
-                        {h.latitude && h.longitude && (
-                          <Typography variant="caption" sx={{ color: "#b2bec3", pl: "26px" }}>
-                            {Number(h.latitude).toFixed(4)}, {Number(h.longitude).toFixed(4)}
-                          </Typography>
-                        )}
-                      </Stack>
-
-                      <Divider sx={{ mb: 2, borderStyle: "dashed" }} />
-
-                      <Stack direction="row" spacing={1.5}>
-                        <Button fullWidth variant="outlined"
-                          onClick={() => { setSelectedHospital(h); setMapOpen(true); }}
-                          disabled={isDeleting}
-                          sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 700, borderColor: "#eee", color: theme.primary }}>
-                          View Map
-                        </Button>
-                        <Button fullWidth variant="contained"
-                          onClick={() => handleOpenEdit(h)}
-                          disabled={isDeleting}
-                          startIcon={<Edit sx={{ fontSize: 16 }} />}
-                          sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 700, bgcolor: "#f1f0fe", color: theme.accent, boxShadow: "none", "&:hover": { bgcolor: "#e8e7ff" } }}>
-                          Edit
-                        </Button>
-                      </Stack>
-                    </CardContent>
-                  </Card>
-                </Grid>
-              );
-            })}
-          </Grid>
-        )}
-      </Box>
-
-      {/* ── Add / Edit Dialog ── */}
-      <Dialog open={openDialog} onClose={() => { setOpenDialog(false); setEditingId(null); }} fullWidth maxWidth="sm"
-        PaperProps={{ sx: { borderRadius: "15px", overflow: "hidden" } }}>
-        <Box sx={{ bgcolor: theme.primary, color: "white", p: 3, position: "relative" }}>
-          <Typography variant="h5" fontWeight={700}>
-            {editingId ? "Update Hospital" : "Register Hospital"}
-          </Typography>
-          <Typography variant="body2" sx={{ opacity: 0.7 }}>
-            Ensure hospital records are accurate for emergency use
-          </Typography>
-          <IconButton
-            onClick={() => { setOpenDialog(false); setEditingId(null); }}
-            sx={{ position: "absolute", right: 12, top: 12, color: "white" }}>
-            <Close />
-          </IconButton>
-        </Box>
-
-        <DialogContent sx={{ p: 4 }}>
-          <Stack spacing={2.5}>
-            <Box sx={{ border: "2px dashed #e0e6ed", borderRadius: "12px", py: 3, textAlign: "center", bgcolor: "#fcfdfe" }}>
-              <LocalHospital sx={{ fontSize: 38, color: "#ccd5df", mb: 0.5 }} />
-              <Typography variant="body2" fontWeight={600} color="#ccd5df">Hospital Information Entry</Typography>
-            </Box>
-
-            <TextField
-              label="Hospital Name *"
-              fullWidth
-              value={form.name}
-              onChange={e => setForm({ ...form, name: e.target.value })}
-              disabled={loading}
-              InputProps={{ sx: { borderRadius: "10px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } } }}
-              InputLabelProps={{ shrink: true }}
-            />
-
-            <TextField
-              label="District"
-              fullWidth
-              value={form.district}
-              onChange={e => setForm({ ...form, district: e.target.value })}
-              disabled={loading}
-              InputProps={{ sx: { borderRadius: "10px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } } }}
-              InputLabelProps={{ shrink: true }}
-            />
-
-            <TextField
-              label="Location Address"
-              fullWidth
-              multiline
-              rows={2}
-              value={form.address}
-              onChange={e => setForm({ ...form, address: e.target.value })}
-              disabled={loading}
-              InputProps={{ sx: { borderRadius: "10px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } } }}
-              InputLabelProps={{ shrink: true }}
-            />
-
-            <TextField
-              label="Contact Number"
-              fullWidth
-              value={form.contact_number}
-              onChange={e => setForm({ ...form, contact_number: e.target.value })}
-              disabled={loading}
-              InputProps={{ sx: { borderRadius: "10px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } } }}
-              InputLabelProps={{ shrink: true }}
-            />
-
-            <Stack direction="row" spacing={2}>
-              <TextField
-                label="Latitude"
-                fullWidth
-                type="number"
-                value={form.latitude}
-                onChange={e => setForm({ ...form, latitude: e.target.value })}
-                disabled={loading}
-                placeholder="e.g. 6.9271"
-                InputProps={{ sx: { borderRadius: "10px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } } }}
-                InputLabelProps={{ shrink: true }}
-              />
-              <TextField
-                label="Longitude"
-                fullWidth
-                type="number"
-                value={form.longitude}
-                onChange={e => setForm({ ...form, longitude: e.target.value })}
-                disabled={loading}
-                placeholder="e.g. 79.8612"
-                InputProps={{ sx: { borderRadius: "10px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } } }}
-                InputLabelProps={{ shrink: true }}
-              />
-            </Stack>
-
-            <Typography variant="caption" sx={{ color: "#b2bec3" }}>
-              💡 Tip: Add lat/lng so the distance from your location appears on the card
-            </Typography>
-          </Stack>
-        </DialogContent>
-
-        <DialogActions sx={{ p: 3, gap: 1 }}>
-          <Button
-            onClick={() => { setOpenDialog(false); setEditingId(null); }}
-            disabled={loading}
-            sx={{ color: "text.secondary", textTransform: "none", fontWeight: 700 }}>
-            Cancel
-          </Button>
           <Button
             variant="contained"
-            onClick={handleSave}
-            disabled={loading}
-            sx={{ bgcolor: theme.primary, px: 4, borderRadius: "10px", textTransform: "none", fontWeight: 700 }}>
-            {loading ? <CircularProgress size={20} sx={{ mr: 1 }} /> : null}
-            {editingId ? "Save Changes" : "Submit Hospital"}
+            startIcon={locating ? <CircularProgress size={14} /> : <NearMe />}
+            onClick={getUserLocation}
+            disabled={locating}
+            sx={{
+              bgcolor: "white",
+              color: "#1a1f36",
+              border: "1px solid #e2e8f0",
+              borderRadius: "10px",
+              textTransform: "none",
+              fontWeight: 700,
+              px: 2,
+              "&:hover": { bgcolor: "#f1f5f9" }
+            }}
+          >
+            {locating ? "Locating..." : "Fix My Location"}
           </Button>
-        </DialogActions>
-      </Dialog>
+          {check("manage_hospitals") && (
+            <Button
+              variant="contained"
+              startIcon={<Add />}
+              onClick={() => { setEditingId(null); setForm(emptyForm); setOpenDialog(true); }}
+              sx={{
+                bgcolor: "#1a1f36",
+                color: "white",
+                borderRadius: "10px",
+                textTransform: "none",
+                fontWeight: 700,
+                px: 3,
+                "&:hover": { bgcolor: "#2e3a59" }
+              }}
+            >
+              Add Hospital
+            </Button>
+          )}
+        </Stack>
+      </Box>
 
-      {/* ── Snackbar ── */}
-      <Snackbar
-        open={snack.open}
-        autoHideDuration={3000}
-        onClose={() => setSnack(s => ({ ...s, open: false }))}
-        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
-        <Alert
-          severity={snack.severity}
-          variant="filled"
+      <Box sx={{ maxWidth: 1400, mx: "auto" }}>
+        {/* Search & Map Toggle */}
+        <Grid container spacing={2} alignItems="center" sx={{ mb: 4 }}>
+          <Grid item xs={12} md={9}>
+            <Paper sx={{ p: 1, borderRadius: "15px", boxShadow: theme.cardShadow }}>
+              <TextField
+                fullWidth
+                placeholder="Search by hospital name, location or district…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                InputProps={{
+                  startAdornment: <InputAdornment position="start"><Search sx={{ color: "text.secondary" }} /></InputAdornment>,
+                  sx: { borderRadius: "12px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } },
+                }}
+                size="small"
+              />
+            </Paper>
+          </Grid>
+          <Grid item xs={12} md={3}>
+            <Button
+              fullWidth
+              variant="outlined"
+              startIcon={<MapIcon />}
+              onClick={() => setMapOpen(true)}
+              sx={{
+                height: 48,
+                borderRadius: "15px",
+                textTransform: "none",
+                color: "#1a1f36",
+                borderColor: "#e2e8f0",
+                bgcolor: "white",
+                fontWeight: 700,
+                "&:hover": { borderColor: "#1a1f36", bgcolor: "#f8fafc" },
+                boxShadow: "0 2px 10px rgba(0,0,0,0.04)"
+              }}
+            >
+              Interactive Map
+            </Button>
+          </Grid>
+        </Grid>
+
+        {/* ── Hospital Cards ── */}
+        <Box sx={{ px: 4 }}>
+          {loading ? (
+            <Box sx={{ textAlign: "center", mt: 8 }}>
+              <CircularProgress />
+              <Typography variant="body2" sx={{ mt: 2, color: "#aaa" }}>
+                Loading hospitals...
+              </Typography>
+            </Box>
+          ) : filtered.length === 0 ? (
+            <Box sx={{ textAlign: "center", mt: 8, color: "#aaa" }}>
+              <LocalHospital sx={{ fontSize: 56, opacity: 0.2 }} />
+              <Typography variant="body1" fontWeight={600} sx={{ mt: 1 }}>
+                {search ? "No hospitals match your search" : "No hospitals yet — click Add Hospital"}
+              </Typography>
+            </Box>
+          ) : (
+            <Grid container spacing={3}>
+              {filtered.map(h => {
+                // Calculate distance instantly
+                const dist =
+                  userPos && h.latitude && h.longitude
+                    ? haversine(userPos.lat, userPos.lng, parseFloat(h.latitude), parseFloat(h.longitude))
+                    : null;
+
+                const isDeleting = loadingHospitals[h.id] || false;
+
+                return (
+                  <Grid item key={h.id} xs={12} md={6} lg={4} sx={{ display: 'flex' }}>
+                    <Card sx={{
+                      borderRadius: "15px",
+                      boxShadow: "0 2px 12px rgba(26,31,54,0.06)",
+                      border: "1px solid #e2e8f0",
+                      overflow: "hidden",
+                      opacity: isDeleting ? 0.6 : 1,
+                      pointerEvents: isDeleting ? "none" : "auto",
+                      transition: "opacity 0.2s",
+                      display: 'flex',
+                      flexDirection: 'column',
+                      height: '100%',
+                      width: '100%'
+                    }}>
+
+                      {/* Blue header band */}
+                      <Box sx={{ height: 140, bgcolor: "#dbeafe", position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <LocalHospital sx={{ fontSize: 56, color: "white", opacity: 0.8 }} />
+
+                        {/* Emergency badge */}
+                        <Box sx={{ position: "absolute", top: 14, left: 14, bgcolor: "#ff7675", color: "white", px: 1.5, py: 0.4, borderRadius: "20px", fontSize: "0.72rem", fontWeight: 700 }}>
+                          EMERGENCY
+                        </Box>
+
+                        {/* Distance badge */}
+                        {dist !== null && (
+                          <Chip
+                            icon={<NearMe sx={{ fontSize: "14px !important", color: "#1a233a !important" }} />}
+                            label={`${dist} km away`}
+                            size="small"
+                            sx={{
+                              position: "absolute", top: 14, right: 14,
+                              bgcolor: "rgba(255,255,255,0.92)", color: theme.primary,
+                              fontWeight: 700, fontSize: "0.72rem",
+                              backdropFilter: "blur(4px)",
+                              boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+                            }}
+                          />
+                        )}
+
+                        {/* Delete button (Admins only) */}
+                        {check("manage_hospitals") && (
+                          <IconButton
+                            onClick={() => handleDelete(h.id)}
+                            disabled={isDeleting}
+                            sx={{ position: "absolute", bottom: 10, right: 10, bgcolor: "white", color: "#ff7675", "&:hover": { bgcolor: "#fff5f5" }, boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}
+                            size="small"
+                          >
+                            {isDeleting ? <CircularProgress size={20} /> : <Delete fontSize="small" />}
+                          </IconButton>
+                        )}
+                      </Box>
+
+                      <CardContent sx={{ p: 3, display: 'flex', flexDirection: 'column', flexGrow: 1, minWidth: 0 }}>
+                        <Typography
+                          variant="h6"
+                          fontWeight={800}
+                          sx={{
+                            mb: 1.5,
+                            color: theme.primary,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}
+                          title={h.name}
+                        >
+                          {h.name}
+                        </Typography>
+
+                        <Stack spacing={1.2} sx={{ mb: 3 }}>
+                          {h.district && (
+                            <Chip
+                              label={h.district}
+                              size="small"
+                              sx={{ width: "fit-content", bgcolor: "#e0f2f1", color: "#00796b", fontWeight: 600, fontSize: "0.7rem" }}
+                            />
+                          )}
+                          <Typography
+                            variant="body2"
+                            display="flex"
+                            alignItems="center"
+                            gap={1}
+                            sx={{
+                              color: "#636e72",
+                              fontWeight: 500,
+                              minWidth: 0,
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis'
+                            }}
+                            title={h.address}
+                          >
+                            <LocationOn sx={{ fontSize: 18, color: "#ff7675", flexShrink: 0 }} />
+                            {h.address || "Address not provided"}
+                          </Typography>
+                          <Typography variant="body2" display="flex" alignItems="center" gap={1} sx={{ color: "#636e72", fontWeight: 500 }}>
+                            <Phone sx={{ fontSize: 18, color: "#ff7675", flexShrink: 0 }} />
+                            {h.contact_number || "Contact not provided"}
+                          </Typography>
+                          {h.latitude && h.longitude && (
+                            <Typography variant="caption" sx={{ color: "#b2bec3", pl: "26px" }}>
+                              {Number(h.latitude).toFixed(4)}, {Number(h.longitude).toFixed(4)}
+                            </Typography>
+                          )}
+                        </Stack>
+                        <Box sx={{ mt: 'auto' }}>
+                          <Divider sx={{ mb: 2, borderStyle: "dashed" }} />
+
+                          <Stack direction="row" spacing={1.5}>
+                            <Button fullWidth variant="outlined"
+                              onClick={() => { setSelectedHospital(h); setMapOpen(true); }}
+                              disabled={isDeleting}
+                              sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 700, borderColor: "#eee", color: theme.primary }}>
+                              View Map
+                            </Button>
+                            {check("manage_hospitals") && (
+                              <Button fullWidth variant="contained"
+                                onClick={() => handleOpenEdit(h)}
+                                disabled={isDeleting}
+                                startIcon={<Edit sx={{ fontSize: 16 }} />}
+                                sx={{ borderRadius: "10px", textTransform: "none", fontWeight: 700, bgcolor: theme.primary, color: "white", boxShadow: "none", "&:hover": { bgcolor: "#0f1425" } }}>
+                                Edit
+                              </Button>
+                            )}
+                          </Stack>
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                );
+              })}
+            </Grid>
+          )}
+        </Box>
+
+        {/* ── Add / Edit Dialog ── */}
+        <Dialog open={openDialog} onClose={() => { setOpenDialog(false); setEditingId(null); }} fullWidth maxWidth="sm"
+          PaperProps={{ sx: { borderRadius: "15px", overflow: "hidden" } }}>
+          <Box sx={{ bgcolor: theme.primary, color: "white", p: 3, position: "relative" }}>
+            <Typography variant="h5" fontWeight={700}>
+              {editingId ? "Update Hospital" : "Register Hospital"}
+            </Typography>
+            <Typography variant="body2" sx={{ opacity: 0.7 }}>
+              Ensure hospital records are accurate for emergency use
+            </Typography>
+            <IconButton
+              onClick={() => { setOpenDialog(false); setEditingId(null); }}
+              sx={{ position: "absolute", right: 12, top: 12, color: "white" }}>
+              <Close />
+            </IconButton>
+          </Box>
+
+          <DialogContent sx={{ p: 4 }}>
+            <Stack spacing={2.5}>
+              <Box sx={{ border: "2px dashed #e0e6ed", borderRadius: "12px", py: 3, textAlign: "center", bgcolor: "#fcfdfe" }}>
+                <LocalHospital sx={{ fontSize: 38, color: "#ccd5df", mb: 0.5 }} />
+                <Typography variant="body2" fontWeight={600} color="#ccd5df">Hospital Information Entry</Typography>
+              </Box>
+
+              <TextField
+                label="Hospital Name *"
+                fullWidth
+                value={form.name}
+                onChange={e => setForm({ ...form, name: e.target.value })}
+                disabled={loading}
+                InputProps={{ sx: { borderRadius: "10px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } } }}
+                InputLabelProps={{ shrink: true }}
+              />
+
+              <TextField
+                label="District"
+                fullWidth
+                value={form.district}
+                onChange={e => setForm({ ...form, district: e.target.value })}
+                disabled={loading}
+                InputProps={{ sx: { borderRadius: "10px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } } }}
+                InputLabelProps={{ shrink: true }}
+              />
+
+              <TextField
+                label="Location Address"
+                fullWidth
+                multiline
+                rows={2}
+                value={form.address}
+                onChange={e => setForm({ ...form, address: e.target.value })}
+                disabled={loading}
+                InputProps={{ sx: { borderRadius: "10px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } } }}
+                InputLabelProps={{ shrink: true }}
+              />
+
+              <TextField
+                label="Contact Number"
+                fullWidth
+                value={form.contact_number}
+                onChange={e => setForm({ ...form, contact_number: e.target.value })}
+                disabled={loading}
+                InputProps={{ sx: { borderRadius: "10px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } } }}
+                InputLabelProps={{ shrink: true }}
+              />
+
+              <Stack direction="row" spacing={2}>
+                <TextField
+                  label="Latitude"
+                  fullWidth
+                  type="number"
+                  value={form.latitude}
+                  onChange={e => setForm({ ...form, latitude: e.target.value })}
+                  disabled={loading}
+                  placeholder="e.g. 6.9271"
+                  InputProps={{ sx: { borderRadius: "10px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } } }}
+                  InputLabelProps={{ shrink: true }}
+                />
+                <TextField
+                  label="Longitude"
+                  fullWidth
+                  type="number"
+                  value={form.longitude}
+                  onChange={e => setForm({ ...form, longitude: e.target.value })}
+                  disabled={loading}
+                  placeholder="e.g. 79.8612"
+                  InputProps={{ sx: { borderRadius: "10px", bgcolor: theme.inputBg, "& fieldset": { border: "none" } } }}
+                  InputLabelProps={{ shrink: true }}
+                />
+              </Stack>
+
+              <Typography variant="caption" sx={{ color: "#b2bec3" }}>
+                💡 Tip: Add lat/lng so the distance from your location appears on the card
+              </Typography>
+            </Stack>
+          </DialogContent>
+
+          <DialogActions sx={{ p: 3, gap: 1 }}>
+            <Button
+              onClick={() => { setOpenDialog(false); setEditingId(null); }}
+              disabled={loading}
+              sx={{ color: "text.secondary", textTransform: "none", fontWeight: 700 }}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleSave}
+              disabled={loading}
+              sx={{ bgcolor: theme.primary, color: "white", px: 4, borderRadius: "10px", textTransform: "none", fontWeight: 700, "&:hover": { bgcolor: "#0f1425" } }}>
+              {loading ? <CircularProgress size={20} sx={{ mr: 1, color: "white" }} /> : null}
+              {editingId ? "Save Changes" : "Submit Hospital"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* ── Snackbar ── */}
+        <Snackbar
+          open={snack.open}
+          autoHideDuration={3000}
           onClose={() => setSnack(s => ({ ...s, open: false }))}
-          sx={{ borderRadius: "10px" }}>
-          {snack.message}
-        </Alert>
-      </Snackbar>
+          anchorOrigin={{ vertical: "bottom", horizontal: "center" }}>
+          <Alert
+            severity={snack.severity}
+            variant="filled"
+            onClose={() => setSnack(s => ({ ...s, open: false }))}
+            sx={{ borderRadius: "10px" }}>
+            {snack.message}
+          </Alert>
+        </Snackbar>
 
-      {/* ── Map Dialog ── */}
-      <NearbyHospitalsDialog
-        open={mapOpen}
-        onClose={() => { setMapOpen(false); setSelectedHospital(null); }}
-        onAddHospital={(hospitalData) => {
-          setHospitals(prev => [...prev, hospitalData]);
-          showSnack("Hospital added successfully");
-        }}
-        savedHospitals={hospitals}
-        selectedHospital={selectedHospital}
-      />
+        {/* ── Map Dialog ── */}
+        <NearbyHospitalsDialog
+          open={mapOpen}
+          onClose={() => { setMapOpen(false); setSelectedHospital(null); }}
+          onAddHospital={(hospitalData) => {
+            setHospitals(prev => [...prev, hospitalData]);
+            showSnack("Hospital added successfully");
+          }}
+          savedHospitals={hospitals}
+          selectedHospital={selectedHospital}
+        />
+      </Box>
     </Box>
   );
 }

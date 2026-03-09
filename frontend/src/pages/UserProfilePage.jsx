@@ -10,10 +10,12 @@ import {
   CheckCircle, PendingActions, LocationOff, ArrowRight,
 } from '@mui/icons-material';
 import api from '../api/axios';
+import { usePermissions, normalizeRole } from '../hooks/usePermissions';
 
 
 const UserProfilePage = () => {
   const { user } = useAuth();
+  const { hasRole } = usePermissions();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -37,7 +39,7 @@ const UserProfilePage = () => {
           name: user?.name || 'John Doe',
           email: user?.email || 'john@example.com',
           phone_number: '0712345678',
-          role: user?.role || 'community',
+          role: user?.role || 'community_user',
           address: '123 Main Street',
           district: 'Colombo',
           latitude: null,
@@ -62,17 +64,17 @@ const UserProfilePage = () => {
     try {
       console.log("Checking rescuer status for user:", user?.id);
 
-        const response = await api.get(
+      const response = await api.get(
         "/rescuers/rescuers.php?action=getStatus",
         {
-            params: {
+          params: {
             user_id: user?.id
-            }
+          }
         }
-        );
+      );
 
-console.log(response.data.data);
-        
+      console.log(response.data.data);
+
       const mockStatus = {
         is_rescuer: response.data.success && response.data.data ? true : false,
         is_verified: response.data.data?.is_verified || false,
@@ -178,24 +180,26 @@ console.log(response.data.data);
     }
   };
 
-  const getRoleColor = (role) => {
+  const getRoleColor = (userRole) => {
+    const role = normalizeRole(userRole);
     const colors = {
       admin: '#059669',
-      community: '#10b981',
+      community_user: '#10b981',
       chw: '#34d399',
       treatment_provider: '#6ee7b7',
-      programme_manager: '#a7f3d0',
+      logistics_manager: '#a7f3d0',
     };
     return colors[role] || '#10b981';
   };
 
-  const getRoleBgColor = (role) => {
+  const getRoleBgColor = (userRole) => {
+    const role = normalizeRole(userRole);
     const colors = {
       admin: '#064e3b',
-      community: '#047857',
+      community_user: '#047857',
       chw: '#065f46',
       treatment_provider: '#065f46',
-      programme_manager: '#065f46',
+      logistics_manager: '#065f46',
     };
     return colors[role] || '#047857';
   };
@@ -283,7 +287,7 @@ console.log(response.data.data);
 
               <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1.5, flexWrap: 'wrap', mb: 2 }}>
                 <Chip
-                  label={profile.role.replace(/_/g, ' ').toUpperCase()}
+                  label={normalizeRole(profile.role).replace(/_/g, ' ').toUpperCase()}
                   sx={{
                     bgcolor: 'rgba(255,255,255,0.25)',
                     color: 'white',
@@ -341,14 +345,15 @@ console.log(response.data.data);
                     startIcon={<Edit />}
                     onClick={() => setEditMode(true)}
                     sx={{
-                      bgcolor: '#10b981',
+                      bgcolor: '#1a1f36',
+                      color: 'white',
                       textTransform: 'none',
                       fontWeight: 700,
                       borderRadius: '10px',
-                      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
+                      boxShadow: '0 4px 12px rgba(26, 31, 54, 0.3)',
                       '&:hover': {
-                        bgcolor: '#059669',
-                        boxShadow: '0 6px 16px rgba(16, 185, 129, 0.4)',
+                        bgcolor: '#0f1425',
+                        boxShadow: '0 6px 16px rgba(26, 31, 54, 0.4)',
                       },
                     }}
                   >
@@ -513,11 +518,12 @@ console.log(response.data.data);
                         onClick={handleSaveProfile}
                         disabled={loading}
                         sx={{
-                          bgcolor: '#10b981',
+                          bgcolor: '#1a1f36',
+                          color: 'white',
                           fontWeight: 700,
                           borderRadius: '10px',
                           px: 3,
-                          '&:hover': { bgcolor: '#059669' },
+                          '&:hover': { bgcolor: '#0f1425' },
                         }}
                       >
                         Save Changes
@@ -657,140 +663,142 @@ console.log(response.data.data);
                 )}
               </Box>
             </Paper>
-</Grid>
-{user?.role === 'community' && (
-  <>
-  {/* Rescuer Status Card */}
-  <Grid item xs={12} md={5}>
-            <Card sx={{
-              borderRadius: '16px',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
-              border: rescuerStatus?.is_rescuer
-                ? '2px solid #10b981'
-                : '2px solid rgba(16, 185, 129, 0.2)',
-              overflow: 'hidden',
-            }}>
-              {/* Card Header */}
-              <Box sx={{
-                background: 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)',
-                p: 2.5,
-                borderBottom: '1px solid rgba(16, 185, 129, 0.1)',
-              }}>
-                <Typography variant="h6" sx={{ fontWeight: 800, color: '#047857' }}>
-                  🚑 Rescuer Status
-                </Typography>
-              </Box>
-
-              <CardContent sx={{ p: 3 }}>
-                {rescuerStatus?.is_rescuer ? (
-                  <Box>
-                    {/* Verified/Pending Status */}
-                    <Box sx={{
-                      p: 2.5,
-                      borderRadius: '12px',
-                      bgcolor: rescuerStatus?.is_verified ? '#f0fdf4' : '#fffbeb',
-                      border: rescuerStatus?.is_verified
-                        ? '1px solid rgba(16, 185, 129, 0.3)'
-                        : '1px solid rgba(251, 146, 60, 0.3)',
-                      mb: 2.5,
-                    }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
-                        {rescuerStatus?.is_verified
-                          ? <CheckCircle sx={{ color: '#10b981', fontSize: 24 }} />
-                          : <PendingActions sx={{ color: '#f59e0b', fontSize: 24 }} />
-                        }
-                        <Typography sx={{
-                          fontWeight: 800,
-                          color: rescuerStatus?.is_verified ? '#047857' : '#b45309',
-                          fontSize: '0.95rem',
-                        }}>
-                          {rescuerStatus?.is_verified ? 'Verified Rescuer' : 'Pending Verification'}
-                        </Typography>
-                      </Box>
-                      <Typography variant="body2" sx={{ color: '#6b7280', lineHeight: 1.6 }}>
-                        {rescuerStatus?.is_verified
-                          ? '✓ You are an active rescuer and will receive snake incident alerts in your area.'
-                          : '⏳ Your application is under review. An admin will verify your details soon.'}
-                      </Typography>
-                    </Box>
-                  </Box>
-                ) : (
-                  <Box>
-                    {/* Not a rescuer - Call to action */}
-                    <Box sx={{
-                      p: 2.5,
-                      borderRadius: '12px',
-                      bgcolor: '#f0fdf4',
-                      border: '2px dashed rgba(16, 185, 129, 0.3)',
-                      mb: 2.5,
-                    }}>
-                      <Typography variant="body2" sx={{
-                        color: '#6b7280',
-                        lineHeight: 1.8,
-                        mb: 2,
-                      }}>
-                        🐍 Join our snake rescue network and help save lives in your community.
-                      </Typography>
-                      <Typography variant="caption" sx={{
-                        color: '#10b981',
-                        fontWeight: 700,
-                        display: 'block',
-                      }}>
-                        Benefits:
-                      </Typography>
-                      <Typography variant="caption" sx={{
-                        color: '#6b7280',
-                        display: 'block',
-                        mt: 0.5,
-                      }}>
-                        • Real-time incident alerts<br />
-                        • Connect with your community<br />
-                        • Make a difference
-                      </Typography>
-                    </Box>
-
-                    <Button
-                      fullWidth
-                      variant="contained"
-                      startIcon={<LocationOn />}
-                      endIcon={<ArrowRight />}
-                      onClick={handleApplyRescuer}
-                      disabled={!profile.district || loading}
-                      sx={{
-                        background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                        fontWeight: 800,
-                        py: 1.5,
-                        borderRadius: '12px',
-                        boxShadow: '0 6px 20px rgba(16, 185, 129, 0.3)',
-                        textTransform: 'none',
-                        fontSize: '1rem',
-                        '&:hover': {
-                          boxShadow: '0 8px 25px rgba(16, 185, 129, 0.4)',
-                          transform: 'translateY(-2px)',
-                        },
-                        '&.Mui-disabled': {
-                          opacity: 0.6,
-                          background: '#d1d5db',
-                        },
-                      }}
-                    >
-                      Apply as Rescuer
-                    </Button>
-
-                    {!profile.district && (
-                      <Alert severity="info" sx={{ mt: 2, borderRadius: '10px' }}>
-                        Please set your district in the profile to apply
-                      </Alert>
-                    )}
-                  </Box>
-                )}
-              </CardContent>
-          </Card>
           </Grid>
-          </>
-        )}
-      </Grid>
-    </Box>
+          {hasRole('community_user') && (
+            <>
+              {/* Rescuer Status Card */}
+              <Grid item xs={12} md={5}>
+                <Card sx={{
+                  borderRadius: '16px',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.06)',
+                  border: rescuerStatus?.is_rescuer
+                    ? '2px solid #10b981'
+                    : '2px solid rgba(16, 185, 129, 0.2)',
+                  overflow: 'hidden',
+                }}>
+                  {/* Card Header */}
+                  <Box sx={{
+                    background: 'linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)',
+                    p: 2.5,
+                    borderBottom: '1px solid rgba(16, 185, 129, 0.1)',
+                  }}>
+                    <Typography variant="h6" sx={{ fontWeight: 800, color: '#047857' }}>
+                      🚑 Rescuer Status
+                    </Typography>
+                  </Box>
+
+                  <CardContent sx={{ p: 3 }}>
+                    {rescuerStatus?.is_rescuer ? (
+                      <Box>
+                        {/* Verified/Pending Status */}
+                        <Box sx={{
+                          p: 2.5,
+                          borderRadius: '12px',
+                          bgcolor: rescuerStatus?.is_verified ? '#f0fdf4' : '#fffbeb',
+                          border: rescuerStatus?.is_verified
+                            ? '1px solid rgba(16, 185, 129, 0.3)'
+                            : '1px solid rgba(251, 146, 60, 0.3)',
+                          mb: 2.5,
+                        }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
+                            {rescuerStatus?.is_verified
+                              ? <CheckCircle sx={{ color: '#10b981', fontSize: 24 }} />
+                              : <PendingActions sx={{ color: '#f59e0b', fontSize: 24 }} />
+                            }
+                            <Typography sx={{
+                              fontWeight: 800,
+                              color: rescuerStatus?.is_verified ? '#047857' : '#b45309',
+                              fontSize: '0.95rem',
+                            }}>
+                              {rescuerStatus?.is_verified ? 'Verified Rescuer' : 'Pending Verification'}
+                            </Typography>
+                          </Box>
+                          <Typography variant="body2" sx={{ color: '#6b7280', lineHeight: 1.6 }}>
+                            {rescuerStatus?.is_verified
+                              ? '✓ You are an active rescuer and will receive snake incident alerts in your area.'
+                              : '⏳ Your application is under review. An admin will verify your details soon.'}
+                          </Typography>
+                        </Box>
+                      </Box>
+                    ) : (
+                      <Box>
+                        {/* Not a rescuer - Call to action */}
+                        <Box sx={{
+                          p: 2.5,
+                          borderRadius: '12px',
+                          bgcolor: '#f0fdf4',
+                          border: '2px dashed rgba(16, 185, 129, 0.3)',
+                          mb: 2.5,
+                        }}>
+                          <Typography variant="body2" sx={{
+                            color: '#6b7280',
+                            lineHeight: 1.8,
+                            mb: 2,
+                          }}>
+                            🐍 Join our snake rescue network and help save lives in your community.
+                          </Typography>
+                          <Typography variant="caption" sx={{
+                            color: '#10b981',
+                            fontWeight: 700,
+                            display: 'block',
+                          }}>
+                            Benefits:
+                          </Typography>
+                          <Typography variant="caption" sx={{
+                            color: '#6b7280',
+                            display: 'block',
+                            mt: 0.5,
+                          }}>
+                            • Real-time incident alerts<br />
+                            • Connect with your community<br />
+                            • Make a difference
+                          </Typography>
+                        </Box>
+
+                        <Button
+                          fullWidth
+                          variant="contained"
+                          startIcon={<LocationOn />}
+                          endIcon={<ArrowRight />}
+                          onClick={handleApplyRescuer}
+                          disabled={!profile.district || loading}
+                          sx={{
+                            background: '#1a1f36',
+                            color: 'white',
+                            fontWeight: 800,
+                            py: 1.5,
+                            borderRadius: '12px',
+                            boxShadow: '0 6px 20px rgba(26, 31, 54, 0.3)',
+                            textTransform: 'none',
+                            fontSize: '1rem',
+                            '&:hover': {
+                              background: '#0f1425',
+                              boxShadow: '0 8px 25px rgba(26, 31, 54, 0.4)',
+                              transform: 'translateY(-2px)',
+                            },
+                            '&.Mui-disabled': {
+                              opacity: 0.6,
+                              background: '#d1d5db',
+                            },
+                          }}
+                        >
+                          Apply as Rescuer
+                        </Button>
+
+                        {!profile.district && (
+                          <Alert severity="info" sx={{ mt: 2, borderRadius: '10px' }}>
+                            Please set your district in the profile to apply
+                          </Alert>
+                        )}
+                      </Box>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+            </>
+          )}
+        </Grid>
+      </Box>
 
       {/* Confirmation Dialog */}
       <Dialog
@@ -839,14 +847,16 @@ console.log(response.data.data);
             onClick={handleConfirmRescuer}
             disabled={locationLoading}
             sx={{
-              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              background: '#1a1f36',
+              color: 'white',
               textTransform: 'none',
               fontWeight: 700,
               borderRadius: '10px',
-              boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
+              boxShadow: '0 4px 12px rgba(26, 31, 54, 0.3)',
+              '&:hover': { background: '#0f1425' },
             }}
           >
-            {locationLoading ? <CircularProgress size={20} sx={{ mr: 1 }} /> : null}
+            {locationLoading ? <CircularProgress size={20} sx={{ mr: 1, color: 'white' }} /> : null}
             Accept & Continue
           </Button>
         </DialogActions>

@@ -1,9 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box, Paper, Typography, Button, Avatar, Chip, Card, CardContent,
   CircularProgress, Alert, Dialog, DialogTitle, DialogContent, DialogActions,
   IconButton, Snackbar, Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
+  Stack,
 } from '@mui/material';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import {
   Navigation, MyLocation, Phone, Email, LocationOn, Close,
   CallOutlined, EmailOutlined, ContentCopy, CheckCircle,
@@ -14,15 +17,15 @@ import { useAuth } from '../context/authContext';
 import api from '../api/axios';
 
 const theme = createTheme({
-  palette: { 
-    mode: 'light', 
-    primary: { main: '#1a1f36' }, 
-    background: { default: '#f0f2f5', paper: '#ffffff' }, 
-    text: { primary: '#1a1f36', secondary: '#6b7280' } 
+  palette: {
+    mode: 'light',
+    primary: { main: '#1a1f36' },
+    background: { default: '#f0f2f5', paper: '#ffffff' },
+    text: { primary: '#1a1f36', secondary: '#6b7280' }
   },
-  typography: { 
-    fontFamily: '"Inter", "Helvetica Neue", Arial, sans-serif', 
-    h4: { fontWeight: 800, letterSpacing: '-0.03em', color: '#1a1f36' } 
+  typography: {
+    fontFamily: '"Inter", "Helvetica Neue", Arial, sans-serif',
+    h4: { fontWeight: 800, letterSpacing: '-0.03em', color: '#1a1f36' }
   },
 });
 
@@ -37,7 +40,7 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   const R = 6371; // Earth's radius in kilometers
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = 
+  const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
     Math.sin(dLon / 2) * Math.sin(dLon / 2);
@@ -59,7 +62,7 @@ function getDistanceColor(distance) {
 function RescuerContactDialog({ rescuer, open, onClose, distance }) {
   if (!rescuer) return null;
   const color = getAvatarColor(rescuer.user_name || rescuer.name || 'U');
-  
+
   const handleCall = () => window.open(`tel:${(rescuer.phone_number || "6767676676").replace(/\s/g, '')}`);
   const handleEmail = () => window.open(`mailto:${rescuer.email}`);
   const handleCopyPhone = () => navigator.clipboard.writeText(rescuer.phone_number || rescuer.phone);
@@ -83,7 +86,19 @@ function RescuerContactDialog({ rescuer, open, onClose, distance }) {
             {(rescuer.user_name || rescuer.name || 'U').charAt(0)}
           </Avatar>
           <Box>
-            <Typography variant="h6" sx={{ fontWeight: 700 }}>{rescuer.user_name || rescuer.name}</Typography>
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: '220px'
+              }}
+              title={rescuer.user_name || rescuer.name}
+            >
+              {rescuer.user_name || rescuer.name}
+            </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.5 }}>
               <LocationOn sx={{ fontSize: 14, color: '#ef4444' }} />
               <Typography variant="body2">{rescuer.district}</Typography>
@@ -130,19 +145,19 @@ function RescuerContactDialog({ rescuer, open, onClose, distance }) {
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
         <Button onClick={onClose} sx={{ px: 2 }}>Close</Button>
-        <Button 
-          variant="contained" 
-          startIcon={<Navigation />} 
+        <Button
+          variant="contained"
+          startIcon={<Navigation />}
           onClick={handleGetDirections}
-          sx={{ background: '#10b981', '&:hover': { background: '#059669' } }}
+          sx={{ background: '#10b981', color: 'white', '&:hover': { background: '#059669' } }}
         >
           Get Directions
         </Button>
-        <Button 
-          variant="contained" 
-          startIcon={<CallOutlined />} 
+        <Button
+          variant="contained"
+          startIcon={<CallOutlined />}
           onClick={handleCall}
-          sx={{ background: '#1a1f36' }}
+          sx={{ background: '#1a1f36', color: 'white', '&:hover': { background: '#0f1425' } }}
         >
           Call Now
         </Button>
@@ -150,6 +165,14 @@ function RescuerContactDialog({ rescuer, open, onClose, distance }) {
     </Dialog>
   );
 }
+
+// Fix Leaflet's broken default icon path in bundlers (Vite/CRA)
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
+  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+});
 
 export default function NearestRescuers() {
   const { user } = useAuth();
@@ -160,107 +183,138 @@ export default function NearestRescuers() {
   const [rescuers, setRescuers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [userLocation, setUserLocation] = useState(null);
+  const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState(null);
   const [selectedRescuer, setSelectedRescuer] = useState(null);
   const [mapView, setMapView] = useState('map'); // 'map' or 'list'
-  const [snack, setSnack] = useState({ open: false, message: '' });
+  const [snack, setSnack] = useState({ open: false, message: '', severity: 'success' });
 
-  const showSnack = (message) => setSnack({ open: true, message });
+  const showSnack = (message, severity = 'success') => setSnack({ open: true, message, severity });
 
   // Initialize map
   useEffect(() => {
-    if (mapView === 'map' && mapRef.current && !mapInstanceRef.current) {
-      // Dynamically load Leaflet
-      const link = document.createElement('link');
-      link.rel = 'stylesheet';
-      link.href = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css';
-      document.head.appendChild(link);
+    if (mapView !== 'map' || !mapRef.current) return;
 
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
-      script.onload = () => {
-        const L = window.L;
-        const defaultCenter = userLocation 
-          ? [userLocation.lat, userLocation.lon]
-          : [6.9271, 80.7789]; // Sri Lanka center
+    // Small delay to ensure container is ready
+    const timer = setTimeout(() => {
+      // Avoid double-init
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+      }
 
-        const map = L.map(mapRef.current, {
-          zoom: userLocation ? 12 : 7,
-          center: defaultCenter,
-        });
+      const defaultCenter = userLocation
+        ? [userLocation.lat, userLocation.lng]
+        : [6.9271, 80.7789];
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap contributors',
-          maxZoom: 19,
-        }).addTo(map);
+      const map = L.map(mapRef.current, {
+        zoomControl: true,
+        tap: false
+      }).setView(defaultCenter, userLocation ? 12 : 7);
 
-        mapInstanceRef.current = map;
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap'
+      }).addTo(map);
 
-        // Add user location marker
-        if (userLocation) {
-          L.circleMarker([userLocation.lat, userLocation.lon], {
-            radius: 8,
-            fillColor: '#1a1f36',
-            color: '#10b981',
-            weight: 3,
-            opacity: 1,
-            fillOpacity: 0.8,
-          }).addTo(map).bindPopup('Your Location');
+      mapInstanceRef.current = map;
+
+      // Add user location marker
+      if (userLocation) {
+        L.circleMarker([userLocation.lat, userLocation.lng], {
+          radius: 8,
+          fillColor: '#1a1f36',
+          color: '#10b981',
+          weight: 3,
+          opacity: 1,
+          fillOpacity: 0.8,
+        }).addTo(map).bindPopup('Your Location');
+      }
+
+      // Add rescuer markers
+      markersRef.current = [];
+      rescuers.forEach(rescuer => {
+        if (rescuer.latitude && rescuer.longitude) {
+          const markerColor = rescuer.is_verified ? '#10b981' : '#f59e0b';
+          const marker = L.circleMarker(
+            [parseFloat(rescuer.latitude), parseFloat(rescuer.longitude)],
+            {
+              radius: 10,
+              fillColor: markerColor,
+              color: '#fff',
+              weight: 2,
+              opacity: 1,
+              fillOpacity: 0.9,
+            }
+          ).addTo(map);
+
+          marker.bindPopup(`
+            <div style="font-family: Inter, sans-serif; padding: 5px;">
+              <strong style="display: block; margin-bottom: 5px;">${rescuer.user_name || rescuer.name}</strong>
+              <span style="display: block; color: #666; font-size: 11px; margin-bottom: 8px;">${rescuer.district} District</span>
+              <div style="font-weight: 700; color: #10b981; font-size: 11px; margin-bottom: 8px;">${rescuer.distance || 'N/A'} km away</div>
+            </div>
+          `);
+
+          marker.on('click', () => setSelectedRescuer(rescuer));
+          markersRef.current.push(marker);
         }
+      });
+    }, 100);
 
-        // Add rescuer markers
-        markersRef.current.forEach(marker => marker.remove());
-        markersRef.current = [];
-
-        rescuers.forEach(rescuer => {
-          if (rescuer.latitude && rescuer.longitude) {
-            const markerColor = rescuer.is_verified ? '#10b981' : '#f59e0b';
-            const marker = L.circleMarker(
-              [parseFloat(rescuer.latitude), parseFloat(rescuer.longitude)],
-              {
-                radius: 12,
-                fillColor: markerColor,
-                color: '#fff',
-                weight: 3,
-                opacity: 1,
-                fillOpacity: 0.9,
-              }
-            ).addTo(map);
-
-            marker.bindPopup(`
-              <div style="font-family: Arial; font-size: 12px;">
-                <strong>${rescuer.user_name}</strong><br/>
-                ${rescuer.district}<br/>
-                ${rescuer.distance} km away
-              </div>
-            `);
-
-            marker.on('click', () => setSelectedRescuer(rescuer));
-            markersRef.current.push(marker);
-          }
-        });
-      };
-      document.body.appendChild(script);
-    }
+    return () => {
+      clearTimeout(timer);
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+      markersRef.current = [];
+    };
   }, [mapView, userLocation, rescuers]);
 
-  // Get user location
+  // Handle map resizing when switching views
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation({
-            lat: position.coords.latitude,
-            lon: position.coords.longitude
-          });
-          setLocationError(null);
-        },
-        (error) => {
-          setLocationError('Could not get your location. Using default view.');
-        }
-      );
+    if (mapView === 'map' && mapInstanceRef.current) {
+      setTimeout(() => {
+        mapInstanceRef.current.invalidateSize();
+      }, 200);
     }
+  }, [mapView]);
+
+  const getUserLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      setLocationError('Geolocation is not supported by your browser.');
+      return;
+    }
+
+    setLocating(true);
+    setLocationError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude
+        });
+        setLocating(false);
+        showSnack('Location updated successfully', 'success');
+      },
+      (error) => {
+        let msg = 'Could not get your location.';
+        if (error.code === 1) msg = 'Location access denied. Please enable it in browser settings.';
+        else if (error.code === 2) msg = 'Location unavailable accurately.';
+        else if (error.code === 3) msg = 'Location request timed out.';
+
+        setLocationError(msg);
+        setLocating(false);
+        showSnack(msg, 'error');
+      },
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+    );
   }, []);
+
+  // Get user location on mount
+  useEffect(() => {
+    getUserLocation();
+  }, [getUserLocation]);
 
   // Fetch rescuers
   useEffect(() => {
@@ -270,20 +324,20 @@ export default function NearestRescuers() {
         const response = await api.get('/rescuers/rescuers.php?action=getVerified&limit=100');
         if (response.data?.success) {
           let data = response.data.data || [];
-          
+
           // Calculate distances if user location available
           if (userLocation) {
             data = data.map(rescuer => ({
               ...rescuer,
               distance: calculateDistance(
                 userLocation.lat,
-                userLocation.lon,
+                userLocation.lng,
                 parseFloat(rescuer.latitude),
                 parseFloat(rescuer.longitude)
               )
             })).sort((a, b) => parseFloat(a.distance) - parseFloat(b.distance));
           }
-          
+
           setRescuers(data);
         }
       } catch (err) {
@@ -300,20 +354,47 @@ export default function NearestRescuers() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Box sx={{ minHeight: '100vh', background: '#f0f2f5' }}>
+      <Box sx={{ p: { xs: 2, md: 3, lg: 4 } }}>
         {/* Header */}
-        <Box sx={{ background: 'linear-gradient(135deg, #047857 0%, #10b981 100%)', color: 'white', p: 3 }}>
-          <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
-            <Typography variant="h4" sx={{ fontWeight: 800, mb: 1 }}>
-              🗺️ Nearest Rescuers
+        <Box sx={{ mb: 4, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+          <Box>
+            <Typography
+              variant="h4"
+              sx={{ fontWeight: 800, color: "#1a1f36", fontFamily: '"DM Sans", sans-serif', lineHeight: 1.2 }}
+            >
+              Nearest Rescuers
             </Typography>
-            <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.9)' }}>
-              Find verified snake rescuers near your location
+            <Typography sx={{ color: "#64748b", mt: 0.5, fontSize: '0.95rem' }}>
+              Find verified and available snake rescuers near your current coordinates
             </Typography>
           </Box>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <Chip
+              label="Live · Community"
+              size="small"
+              sx={{ background: '#3b82f618', color: '#3b82f6', fontWeight: 700, border: '1px solid #3b82f640' }}
+            />
+            <Button
+              variant="contained"
+              startIcon={locating ? <CircularProgress size={14} /> : <MyLocation />}
+              onClick={getUserLocation}
+              disabled={locating}
+              sx={{
+                bgcolor: "#1a1f36",
+                color: "white",
+                borderRadius: "10px",
+                textTransform: "none",
+                fontWeight: 700,
+                px: 3,
+                "&:hover": { bgcolor: "#2e3a59" }
+              }}
+            >
+              {locating ? "Locating..." : "Refresh My Location"}
+            </Button>
+          </Stack>
         </Box>
 
-        <Box sx={{ maxWidth: 1400, mx: 'auto', p: 3 }}>
+        <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
           {locationError && (
             <Alert severity="info" onClose={() => setLocationError(null)} sx={{ mb: 3 }}>
               {locationError}
@@ -322,29 +403,48 @@ export default function NearestRescuers() {
 
           {/* View Toggle & Stats */}
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button 
-                variant={mapView === 'map' ? 'contained' : 'outlined'}
+            <Box sx={{ display: 'flex', gap: 1, bgcolor: '#f1f5f9', p: 0.5, borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              <Button
                 onClick={() => setMapView('map')}
-                sx={{ background: mapView === 'map' ? '#1a1f36' : undefined }}
+                sx={{
+                  bgcolor: mapView === 'map' ? 'white' : 'transparent',
+                  color: mapView === 'map' ? '#1a1f36' : '#64748b',
+                  borderRadius: '10px',
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  px: 2.5,
+                  boxShadow: mapView === 'map' ? '0 2px 8px rgba(0,0,0,0.06)' : 'none',
+                  "&:hover": { bgcolor: mapView === 'map' ? 'white' : 'rgba(0,0,0,0.04)' }
+                }}
               >
                 📍 Map View
               </Button>
-              <Button 
-                variant={mapView === 'list' ? 'contained' : 'outlined'}
+              <Button
                 onClick={() => setMapView('list')}
-                sx={{ background: mapView === 'list' ? '#1a1f36' : undefined }}
+                sx={{
+                  bgcolor: mapView === 'list' ? 'white' : 'transparent',
+                  color: mapView === 'list' ? '#1a1f36' : '#64748b',
+                  borderRadius: '10px',
+                  textTransform: 'none',
+                  fontWeight: 700,
+                  px: 2.5,
+                  boxShadow: mapView === 'list' ? '0 2px 8px rgba(0,0,0,0.06)' : 'none',
+                  "&:hover": { bgcolor: mapView === 'list' ? 'white' : 'rgba(0,0,0,0.04)' }
+                }}
               >
                 📋 List View
               </Button>
             </Box>
-            {userLocation && (
-              <Chip
-                icon={<MyLocation />}
-                label={`${rescuers.length} rescuers found`}
-                sx={{ height: 32, bgcolor: '#f0fdf4', color: '#10b981', fontWeight: 700 }}
-              />
-            )}
+
+            <Stack direction="row" spacing={1} alignItems="center">
+              {userLocation && (
+                <Chip
+                  icon={<CheckCircle sx={{ fontSize: '16px !important', color: '#10b981 !important' }} />}
+                  label={`${rescuers.length} rescuers found`}
+                  sx={{ height: 32, bgcolor: '#f0fdf4', color: '#10b981', fontWeight: 700, borderRadius: 2 }}
+                />
+              )}
+            </Stack>
           </Box>
 
           {loading ? (
@@ -353,7 +453,7 @@ export default function NearestRescuers() {
             </Box>
           ) : mapView === 'map' ? (
             // Map View
-            <Paper sx={{ borderRadius: 3, overflow: 'hidden', height: 600 }}>
+            <Paper sx={{ borderRadius: 3, overflow: 'hidden', height: { xs: 500, md: 700 }, border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}>
               <Box ref={mapRef} sx={{ width: '100%', height: '100%' }} />
             </Paper>
           ) : (
@@ -371,9 +471,9 @@ export default function NearestRescuers() {
                 </TableHead>
                 <TableBody>
                   {rescuers.map((rescuer) => (
-                    <TableRow 
-                      key={rescuer.id} 
-                      sx={{ 
+                    <TableRow
+                      key={rescuer.id}
+                      sx={{
                         '&:hover': { background: '#f9fafb' },
                         cursor: 'pointer'
                       }}
@@ -381,26 +481,36 @@ export default function NearestRescuers() {
                     >
                       <TableCell>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Avatar 
-                            sx={{ 
-                              width: 36, 
-                              height: 36, 
+                          <Avatar
+                            sx={{
+                              width: 36,
+                              height: 36,
                               background: getAvatarColor(rescuer.user_name || rescuer.name || 'U'),
                               fontWeight: 700
                             }}
                           >
                             {(rescuer.user_name || rescuer.name || 'U').charAt(0)}
                           </Avatar>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontWeight: 600,
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              maxWidth: '180px'
+                            }}
+                            title={rescuer.user_name || rescuer.name}
+                          >
                             {rescuer.user_name || rescuer.name}
                           </Typography>
                         </Box>
                       </TableCell>
                       <TableCell>{rescuer.district}</TableCell>
                       <TableCell align="right">
-                        <Chip 
+                        <Chip
                           label={`${rescuer.distance} km`}
-                          sx={{ 
+                          sx={{
                             background: getDistanceColor(rescuer.distance) + '20',
                             color: getDistanceColor(rescuer.distance),
                             fontWeight: 700
@@ -411,14 +521,14 @@ export default function NearestRescuers() {
                         <CheckCircle sx={{ color: '#10b981', fontSize: 20 }} />
                       </TableCell>
                       <TableCell align="right">
-                        <Button 
-                          size="small" 
+                        <Button
+                          size="small"
                           variant="contained"
                           onClick={(e) => {
                             e.stopPropagation();
                             window.open(`tel:${(rescuer.phone_number || rescuer.phone).replace(/\s/g, '')}`);
                           }}
-                          sx={{ background: '#3b82f6' }}
+                          sx={{ background: '#1a1f36', color: 'white', '&:hover': { background: '#0f1425' } }}
                         >
                           Call
                         </Button>
@@ -456,17 +566,18 @@ export default function NearestRescuers() {
           )}
         </Box>
 
-        <RescuerContactDialog 
-          rescuer={selectedRescuer} 
-          open={Boolean(selectedRescuer)} 
+        <RescuerContactDialog
+          rescuer={selectedRescuer}
+          open={Boolean(selectedRescuer)}
           onClose={() => setSelectedRescuer(null)}
           distance={selectedRescuer?.distance || 'N/A'}
         />
 
-        <Snackbar open={snack.open} autoHideDuration={3000} onClose={() => setSnack({ ...snack, open: false })}>
-          <Alert severity="success" variant="filled">{snack.message}</Alert>
+        <Snackbar open={snack.open} autoHideDuration={4000} onClose={() => setSnack({ ...snack, open: false })}>
+          <Alert severity={snack.severity} variant="filled" sx={{ borderRadius: 2 }}>{snack.message}</Alert>
         </Snackbar>
       </Box>
-    </ThemeProvider>
+    
+    </ThemeProvider >
   );
 }

@@ -36,16 +36,18 @@ import { useAuth } from '../context/authContext';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const COLORS = {
-  primary:   '#1a1f36',   // deep navy
-  accent:    '#00d4aa',   // teal-green
-  accentAlt: '#ff6b6b',   // coral-red
-  amber:     '#ffb347',
-  sky:       '#4fc3f7',
-  purple:    '#9c8fff',
-  surface:   '#ffffff',
-  surfaceAlt:'#f6f8fc',
-  border:    '#e8ecf4',
-  textMuted: '#8892a4',
+  primary: '#1a1f36',   // deep navy
+  accent: '#10b981',   // emerald
+  accentDark: '#065f46',   // deep emerald
+  amber: '#f59e0b',   // amber
+  sky: '#3b82f6',   // blue
+  purple: '#8b5cf6',   // violet
+  surface: '#ffffff',
+  surfaceAlt: '#f8fafc',
+  border: '#e2e8f0',
+  textMuted: '#64748b',
+  error: '#ef4444',   // strictly for errors/critical
+  slate: '#475569',   // for neutral stats
 };
 
 const cardSx = {
@@ -119,39 +121,39 @@ const monthlyData = [
 ];
 
 const snakeTypeData = [
-  { name: 'Cobra',  value: 120, color: '#1a1f36' },
-  { name: 'Viper',  value: 80,  color: '#9c8fff' },
-  { name: 'Krait',  value: 60,  color: '#4fc3f7' },
-  { name: 'Other',  value: 40,  color: '#00d4aa' },
+  { name: 'Cobra', value: 120, color: '#1a1f36' },
+  { name: 'Viper', value: 80, color: '#9c8fff' },
+  { name: 'Krait', value: 60, color: '#4fc3f7' },
+  { name: 'Other', value: 40, color: '#00d4aa' },
 ];
 
 const districtData = [
-  { district: 'Central',  cases: 45 },
-  { district: 'Eastern',  cases: 38 },
-  { district: 'Western',  cases: 52 },
+  { district: 'Central', cases: 45 },
+  { district: 'Eastern', cases: 38 },
+  { district: 'Western', cases: 52 },
   { district: 'Northern', cases: 28 },
   { district: 'Southern', cases: 35 },
 ];
 
 const recentCases = [
-  { id: 1, patient: 'John Doe',     snake: 'Cobra', status: 'Under Treatment', district: 'Central', time: '2 hours ago' },
-  { id: 2, patient: 'Jane Smith',   snake: 'Viper', status: 'Recovered',       district: 'Eastern', time: '5 hours ago' },
+  { id: 1, patient: 'John Doe', snake: 'Cobra', status: 'Under Treatment', district: 'Central', time: '2 hours ago' },
+  { id: 2, patient: 'Jane Smith', snake: 'Viper', status: 'Recovered', district: 'Eastern', time: '5 hours ago' },
   { id: 3, patient: 'Mike Johnson', snake: 'Krait', status: 'Under Treatment', district: 'Western', time: '1 day ago' },
 ];
 
 const hospitalStock = [
-  { name: 'Central Hospital',  pct: 75 },
-  { name: 'Eastern Medical',   pct: 45 },
-  { name: 'Western Clinic',    pct: 20 },
-  { name: 'Northern Health',   pct: 85 },
+  { name: 'Central Hospital', pct: 75 },
+  { name: 'Eastern Medical', pct: 45 },
+  { name: 'Western Clinic', pct: 20 },
+  { name: 'Northern Health', pct: 85 },
 ];
 
 const getStatusMeta = (status) => {
   switch (status) {
-    case 'Under Treatment': return { color: COLORS.amber,    bg: '#fff8ee', label: status };
-    case 'Recovered':       return { color: COLORS.accent,   bg: '#edfaf6', label: status };
-    case 'Critical':        return { color: COLORS.accentAlt,bg: '#fff1f1', label: status };
-    default:                return { color: COLORS.textMuted, bg: '#f5f5f5', label: status };
+    case 'Under Treatment': return { color: COLORS.amber, bg: '#fff8ee', label: status };
+    case 'Recovered': return { color: COLORS.accent, bg: '#edfaf6', label: status };
+    case 'Critical': return { color: COLORS.accentAlt, bg: '#fff1f1', label: status };
+    default: return { color: COLORS.textMuted, bg: '#f5f5f5', label: status };
   }
 };
 
@@ -202,16 +204,16 @@ export default function Dashboard() {
       {/* ── Row 1: Stat cards ── */}
       <Grid container spacing={2.5} sx={{ mb: 3 }}>
         <Grid item xs={12} sm={6} lg={3}>
-          <StatCard title="Total Cases"       value="324" icon={<Dangerous fontSize="medium" />}        accentColor={COLORS.accentAlt} trend="+12% this month" />
+          <StatCard title="Total Cases" value="324" icon={<Dangerous fontSize="medium" />} accentColor={COLORS.accentAlt} trend="+12% this month" />
         </Grid>
         <Grid item xs={12} sm={6} lg={3}>
-          <StatCard title="Under Treatment"   value="28"  icon={<Warning fontSize="medium" />}           accentColor={COLORS.amber}     sub="Active patients" />
+          <StatCard title="Under Treatment" value="28" icon={<Warning fontSize="medium" />} accentColor={COLORS.amber} sub="Active patients" />
         </Grid>
         <Grid item xs={12} sm={6} lg={3}>
-          <StatCard title="Recovered"         value="285" icon={<CheckCircle fontSize="medium" />}       accentColor={COLORS.accent}    trend="+8% this month" />
+          <StatCard title="Recovered" value="285" icon={<CheckCircle fontSize="medium" />} accentColor={COLORS.accent} trend="+8% this month" />
         </Grid>
         <Grid item xs={12} sm={6} lg={3}>
-          <StatCard title="Active Rescuers"   value="45"  icon={<People fontSize="medium" />}            accentColor={COLORS.sky}       sub="On duty today" />
+          <StatCard title="Active Rescuers" value="45" icon={<People fontSize="medium" />} accentColor={COLORS.sky} sub="On duty today" />
         </Grid>
       </Grid>
 
@@ -229,9 +231,9 @@ export default function Dashboard() {
                 <YAxis tick={{ fill: COLORS.textMuted, fontSize: 12 }} axisLine={false} tickLine={false} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend wrapperStyle={{ fontSize: 12, paddingTop: 16 }} />
-                <Line type="monotone" dataKey="cases"     stroke={COLORS.purple}    strokeWidth={2.5} dot={{ r: 4, fill: COLORS.purple }}    name="Total Cases" />
-                <Line type="monotone" dataKey="recovered" stroke={COLORS.accent}    strokeWidth={2.5} dot={{ r: 4, fill: COLORS.accent }}     name="Recovered" />
-                <Line type="monotone" dataKey="deaths"    stroke={COLORS.accentAlt} strokeWidth={2.5} dot={{ r: 4, fill: COLORS.accentAlt }} name="Deaths" />
+                <Line type="monotone" dataKey="cases" stroke={COLORS.purple} strokeWidth={2.5} dot={{ r: 4, fill: COLORS.purple }} name="Total Cases" />
+                <Line type="monotone" dataKey="recovered" stroke={COLORS.accent} strokeWidth={2.5} dot={{ r: 4, fill: COLORS.accent }} name="Recovered" />
+                <Line type="monotone" dataKey="deaths" stroke={COLORS.accentAlt} strokeWidth={2.5} dot={{ r: 4, fill: COLORS.accentAlt }} name="Deaths" />
               </LineChart>
             </ResponsiveContainer>
           </Paper>
